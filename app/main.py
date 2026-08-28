@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 
+from app.api.intent import router as intent_router
 from app.api.purchase import router as purchase_router
 from app.core.db import close_db
 from app.core.redis import close_redis, ping_redis
@@ -31,6 +32,7 @@ app = FastAPI(
 )
 
 app.include_router(purchase_router, prefix="/api/v1")
+app.include_router(intent_router, prefix="/api/v1")
 
 @app.get("/health")
 async def health_check():
