@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>智能餐厅 AI Agent 控制台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            slate: {
+              50: '#F8FAFC', 100: '#F1F5F9', 200: '#E2E8F0',
+              300: '#CBD5E1', 500: '#64748B', 700: '#334155', 800: '#1E293B'
+            },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .fade-in { animation: fadeIn .35s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: none;} }
+    .bar-transition { transition: width .6s cubic-bezier(.4,0,.2,1); }
+    .toast { transition: all .3s ease; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+  <!-- 顶部悬浮控制栏 -->
+  <header class="sticky top-0 z-20 backdrop-blur bg-white/80 border-b border-slate-200 shadow-sm">
+    <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-lg shadow-sm">智</div>
+        <div>
+          <h1 class="text-base font-semibold text-slate-800 leading-tight">智能餐厅 · AI Agent 控制台</h1>
+          <p class="text-xs text-slate-500">Smart Restaurant AI Agent Dashboard</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="px-4 py-2 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center gap-2">
+          <span class="text-xs text-slate-500">虚拟系统日期</span>
+          <span id="virtual-date" class="font-semibold text-sm tabular-nums text-slate-800">加载中…</span>
+          <button id="btn-reset" title="重置时钟" class="ml-1 w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 9a8 8 0 0113.9-2.5M20 15a8 8 0 01-13.9 2.5"/></svg>
+          </button>
+        </div>
+        <button data-days="1" class="btn-advance px-4 py-2 rounded-xl bg-white border border-slate-200 text-sm font-medium shadow-sm hover:bg-slate-100 transition active:scale-95">快进 1 天</button>
+        <button data-days="2" class="btn-advance px-4 py-2 rounded-xl bg-slate-800 text-white text-sm font-medium shadow-sm hover:bg-slate-700 transition active:scale-95">快进 2 天</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-6 space-y-8">
+    <!-- 库存健康度看板 -->
+    <section>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-slate-800 uppercase tracking-wide">食材库存健康度</h2>
+        <span class="text-xs text-slate-400">当前库存 / 安全线比率</span>
+      </div>
+      <div id="inventory-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <!-- 卡片由 JS 渲染 -->
+      </div>
+    </section>
+
+    <!-- Agent 采购工作流与 HITL 审批中心 -->
+    <section>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-slate-800 uppercase tracking-wide">采购工作流 · HITL 审批中心</h2>
+        <span id="order-count" class="text-xs text-slate-400">0 笔订单</span>
+      </div>
+      <div id="order-list" class="space-y-3">
+        <!-- 订单卡片由 JS 渲染 -->
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast fixed top-20 left-1/2 -translate-x-1/2 px-5 py-3 rounded-xl bg-slate-800 text-white text-sm shadow-xl opacity-0 pointer-events-none"></div>
+
+  <script>
+    const API = '/api/v1';
+    let state = { inventory: [], orders: [], virtual_date: '' };
+
+    const healthUI = {
+      healthy: { badge:'bg-emerald-50 text-emerald-700 border-emerald-200', bar:'bg-emerald-500', dot:'text-emerald-600', label:'健康' },
+      low:    { badge:'bg-amber-50 text-amber-700 border-amber-200',    bar:'bg-amber-500', dot:'text-amber-600', label:'偏低' },
+      critical:{ badge:'bg-rose-50 text-rose-700 border-rose-200',      bar:'bg-rose-500', dot:'text-rose-600', label:'缺货' }
+    };
+    const statusUI = {
+      COMPLETED:   'bg-emerald-50 text-emerald-700 border-emerald-200',
+      SUSPENDED:   'bg-amber-50 text-amber-700 border-amber-200',
+      REJECTED:    'bg-rose-50 text-rose-700 border-rose-200',
+      RUNNING:     'bg-slate-100 text-slate-600 border-slate-200',
+      NO_PURCHASE: 'bg-slate-100 text-slate-500 border-slate-200',
+      PURCHASE_CREATED: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    };
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.style.opacity = '1';
+      setTimeout(() => t.style.opacity = '0', 2200);
+    }
+
+    async function api(path, opts = {}) {
+      const r = await fetch('/api/v1' + path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts
+      });
+      if (!r.ok) {
+        let msg = r.status + ' ' + r.statusText;
+        try { const j = await r.json(); msg = j.detail || msg; } catch (e) {}
+        throw new Error(msg);
+      }
+      return r.json();
+    }
+
+    async function loadDashboard() {
+      const d = await api('/dashboard');
+      state = d;
+      document.getElementById('virtual-date').textContent = d.virtual_date || '—';
+      renderInventory();
+      renderOrders();
+    }
+
+    function renderInventory() {
+      const grid = document.getElementById('inventory-grid');
+      grid.innerHTML = '';
+      state.inventory.forEach((it, idx) => {
+        const h = healthUI[it.health] || healthUI.healthy;
+        const barPct = Math.min(200, Math.max(0, it.ratio));
+        const card = document.createElement('div');
+        card.className = 'fade-in bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-col gap-3';
+        card.style.animationDelay = (idx * 30) + 'ms';
+        card.innerHTML = `
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="text-xs text-slate-400 mb-1">${it.category}</div>
+              <div class="font-semibold text-slate-800">${it.name}</div>
+            </div>
+            <span class="text-xs px-2 py-0.5 rounded-full border font-medium ${h.badge}">${h.label}</span>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs text-slate-500 mb-1">
+              <span class="font-semibold text-slate-800 text-sm tabular-nums">${it.current_stock}<span class="text-slate-400 font-normal"> ${it.unit}</span></span>
+              <span>安全线 ${it.safety_stock}</span>
+            </div>
+            <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div class="bar-transition h-full rounded-full ${h.bar}" style="width:${barPct <= 200 ? barPct : 100}%"></div>
+            </div>
+            <div class="flex justify-between text-[11px] text-slate-400 mt-1.5">
+              <span>日消耗 ${it.daily_sales}</span><span>${it.ratio}%</span>
+            </div>
+          </div>`;
+        grid.appendChild(card);
+      });
+    }
+
+    function renderOrders() {
+      const list = document.getElementById('order-list');
+      document.getElementById('order-count').textContent = state.orders.length + ' 笔订单';
+      if (state.orders.length === 0) {
+        list.innerHTML = `<div class="text-center text-slate-400 text-sm py-10 bg-white border border-slate-200 rounded-2xl shadow-sm">暂无采购订单，快进时间后会在此处展示自动触发的挂起订单。</div>`;
+        return;
+      }
+      list.innerHTML = '';
+      state.orders.forEach(o => {
+        const st = statusUI[o.status] || 'bg-slate-100 text-slate-600 border-slate-200';
+        const wrap = document.createElement('div');
+        wrap.className = 'fade-in bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden';
+        const isSus = o.status === 'SUSPENDED';
+        wrap.innerHTML = `
+          <div class="flex items-center justify-between px-5 py-4">
+            <div class="flex items-center gap-4">
+              <span class="font-mono text-sm text-slate-700 font-medium">#${o.order_id}</span>
+              <div>
+                <div class="font-medium text-slate-800">${o.ingredient || '未知食材'}</div>
+                <div class="text-xs text-slate-400">${o.order_no}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="text-sm text-slate-600">数量 <b class="tabular-nums">${o.quantity ?? '—'}</b> kg</span>
+              <span class="text-sm text-slate-500">¥<b class="tabular-nums">${o.total_amount.toFixed ? o.total_amount.toFixed(2) : o.total_amount}</b></span>
+              <span class="text-xs px-2.5 py-1 rounded-full border font-medium ${st}">${o.status}</span>
+            </div>
+          </div>
+          ${isSus ? `
+          <div class="mx-5 mb-3 rounded-xl border border-amber-200 bg-amber-50/50 p-4">
+            <div class="text-xs font-semibold text-amber-700 mb-2 flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.9 5h13.7a1 1 0 00.9-1.4l-6.9-14a1 1 0 00-1.8 0l-6.9 14a1 1 0 00.9 1.4z"/></svg>
+              RiskAgent LLM 风控分析报告
+            </div>
+            <p class="text-sm text-slate-700 leading-relaxed whitespace-pre-line">${o.risk_analysis_report || (o.risk_reason || '（暂无风控报告）')}</p>
+            <div class="mt-3 flex gap-2">
+              <button class="btn-approve px-4 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-500 transition" data-id="${o.order_id}">批准采购</button>
+              <button class="btn-reject px-4 py-1.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-sm font-medium hover:bg-rose-100 transition" data-id="${o.order_id}">驳回</button>
+            </div>
+          </div>` : ''}`;
+        list.appendChild(wrap);
+      });
+
+      document.querySelectorAll('.btn-approve').forEach(b => b.onclick = () => decide(b.dataset.id, true));
+      document.querySelectorAll('.btn-reject').forEach(b => b.onclick = () => decide(b.dataset.id, false));
+    }
+
+    async function decide(orderId, approved) {
+      try {
+        await api('/purchase/' + orderId + '/approve', { method: 'POST', body: JSON.stringify({ approved, approval_reason: approved ? '控制台人工批准' : '控制台人工驳回' }) });
+        showToast(approved ? '✓ 已批准采购，库存已自动补满' : '订单已驳回');
+        await loadDashboard();
+      } catch (e) {
+        showToast('操作失败：' + e.message);
+      }
+    }
+
+    document.querySelectorAll('.btn-advance').forEach(b => b.onclick = async () => {
+      const days = b.dataset.days;
+      try {
+        const r = await api('/test/advance-day', { method: 'POST', body: JSON.stringify({ days: parseInt(days) }) });
+        showToast('已快进 ' + days + ' 天');
+        state.virtual_date = r.data.current_virtual_date;
+        await loadDashboard();
+      } catch (e) {
+        showToast('快进失败：' + e.message);
+      }
+    });
+
+    document.getElementById('btn-reset').onclick = async () => {
+      try {
+        await api('/test/reset-clock', { method: 'POST' });
+        showToast('虚拟时钟已重置');
+        await loadDashboard();
+      } catch (e) { showToast('重置失败：' + e.message); }
+    };
+
+    loadDashboard().catch(e => showToast('加载失败：' + e.message));
+  </script>
+</body>
+</html>

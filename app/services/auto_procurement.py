@@ -149,11 +149,16 @@ async def scan_and_trigger_procurement(
                 text(
                     """
                     UPDATE purchase_orders
-                    SET status = 'SUSPENDED', total_amount = :total_amount
+                    SET status = 'SUSPENDED', total_amount = :total_amount,
+                        risk_analysis_report = :risk_analysis_report
                     WHERE id = :order_id
                     """
                 ),
-                {"total_amount": total_amount, "order_id": order_id},
+                {
+                    "total_amount": total_amount,
+                    "risk_analysis_report": risk_analysis_report,
+                    "order_id": order_id,
+                },
             )
             await db.execute(
                 text(
@@ -188,6 +193,30 @@ async def scan_and_trigger_procurement(
             continue
 
         final_status = run_result.get("status", "UNKNOWN")
+        quantity_auto = float(run_result.get("quantity", 0))
+        total_amount_auto = float(run_result.get("total_amount", 0))
+
+        # 非中断路径（NO_PURCHASE/PURCHASE_CREATED 等）也记录采购明细，供看板展示
+        if quantity_auto > 0:
+            await db.execute(
+                text(
+                    """
+                    INSERT INTO purchase_order_items
+                        (order_id, ingredient_id, quantity, unit_price, total_price, supplier_id)
+                    VALUES
+                        (:order_id, :ingredient_id, :quantity, :unit_price, :total_price, :supplier_id)
+                    """
+                ),
+                {
+                    "order_id": order_id,
+                    "ingredient_id": int(bundle["ingredient_id"]),
+                    "quantity": quantity_auto,
+                    "unit_price": float(bundle["current_price"]),
+                    "total_price": total_amount_auto,
+                    "supplier_id": int(bundle["supplier_id"]),
+                },
+            )
+
         await db.execute(
             text(
                 """
@@ -198,7 +227,7 @@ async def scan_and_trigger_procurement(
             ),
             {
                 "status": final_status,
-                "total_amount": float(run_result.get("total_amount", 0)),
+                "total_amount": total_amount_auto,
                 "order_id": order_id,
             },
         )
@@ -209,7 +238,7 @@ async def scan_and_trigger_procurement(
                 "order_id": order_id,
                 "ingredient": bundle["ingredient_name"],
                 "status": final_status,
-                "quantity": float(run_result.get("quantity", 0)),
+                "quantity": quantity_auto,
                 "demand_reasoning": run_result.get("demand_reasoning", ""),
                 "risk_analysis_report": run_result.get("risk_analysis_report"),
             }
