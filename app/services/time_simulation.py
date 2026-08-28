@@ -2,8 +2,11 @@ from typing import Dict, Any, List
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.clock import advance_virtual_days
+from app.services.auto_procurement import scan_and_trigger_procurement
 
-async def simulate_days_passing(db: AsyncSession, days: int = 1) -> Dict[str, Any]:
+async def simulate_days_passing(
+    db: AsyncSession, days: int = 1, graph: Any = None
+) -> Dict[str, Any]:
     # 1. 推进虚拟时间
     new_date = advance_virtual_days(days)
 
@@ -53,9 +56,15 @@ async def simulate_days_passing(db: AsyncSession, days: int = 1) -> Dict[str, An
 
     await db.commit()
 
+    # 3. 巡检低于安全库存线的食材，自动触发采购
+    auto_procurement: List[Dict[str, Any]] = []
+    if graph is not None:
+        auto_procurement = await scan_and_trigger_procurement(db, graph)
+
     return {
         "current_virtual_date": new_date.isoformat(),
         "days_advanced": days,
         "updated_ingredients": updated_items,
-        "low_stock_alerts": low_stock_alerts
+        "low_stock_alerts": low_stock_alerts,
+        "auto_procurement_triggered": auto_procurement,
     }

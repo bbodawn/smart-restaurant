@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,13 +19,15 @@ async def get_clock_status():
 
 @router.post("/advance-day")
 async def advance_time_and_simulate(
-    request: AdvanceTimeRequest,
+    request: Request,
+    body: AdvanceTimeRequest,
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        res = await simulate_days_passing(db, days=request.days)
+        graph = getattr(request.app.state, "graph", None)
+        res = await simulate_days_passing(db, days=body.days, graph=graph)
         return {
-            "message": f"Successfully advanced {request.days} day(s).",
+            "message": f"Successfully advanced {body.days} day(s).",
             "data": res
         }
     except Exception as e:
