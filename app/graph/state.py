@@ -13,6 +13,7 @@ class PurchaseState(TypedDict, total=False):
     daily_sales: float
     predicted_demand: float
     quantity: float
+    demand_reasoning: str
 
     supplier_id: int
     supplier_name: str
@@ -21,6 +22,7 @@ class PurchaseState(TypedDict, total=False):
 
     price_deviation: float
     total_amount: float
+    risk_analysis_report: Optional[str]
 
     risk_reason: Optional[str]
     approved: Optional[bool]
