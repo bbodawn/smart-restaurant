@@ -219,6 +219,23 @@ async def scan_and_trigger_procurement(
                 },
             )
 
+        # 低库存自动放行（无需人工审批的采购）直接完成入库补货，
+        # 避免只生成订单而库存未回补（如价格偏离小、金额低的食材）。
+        if final_status in ("PURCHASE_CREATED", "APPROVED") and quantity_auto > 0:
+            await db.execute(
+                text(
+                    """
+                    UPDATE inventory
+                    SET current_stock = current_stock + :quantity
+                    WHERE ingredient_id = :ingredient_id
+                    """
+                ),
+                {
+                    "quantity": quantity_auto,
+                    "ingredient_id": int(bundle["ingredient_id"]),
+                },
+            )
+
         await db.execute(
             text(
                 """
