@@ -2,6 +2,7 @@ from typing import Dict, Any, List
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.clock import advance_virtual_days
+from app.services.auto_approval import auto_approve_suspended_orders
 from app.services.auto_procurement import scan_and_trigger_procurement
 
 async def simulate_days_passing(
@@ -56,7 +57,12 @@ async def simulate_days_passing(
 
     await db.commit()
 
-    # 3. 巡检低于安全库存线的食材，自动触发采购
+    # 3. 自动放行超过阈值天数仍待人工审批的挂起单（HITL 兜底）
+    auto_approved: List[Dict[str, Any]] = []
+    if graph is not None:
+        auto_approved = await auto_approve_suspended_orders(db, graph)
+
+    # 4. 巡检低于安全库存线的食材，自动触发采购
     auto_procurement: List[Dict[str, Any]] = []
     if graph is not None:
         auto_procurement = await scan_and_trigger_procurement(db, graph)
@@ -67,4 +73,5 @@ async def simulate_days_passing(
         "updated_ingredients": updated_items,
         "low_stock_alerts": low_stock_alerts,
         "auto_procurement_triggered": auto_procurement,
+        "auto_approved_suspended": auto_approved,
     }

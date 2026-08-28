@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.clock import get_current_date
 from app.graph.state import PurchaseState
 
 # 未完成采购单状态（用于避免重复触发）
@@ -151,7 +152,8 @@ async def scan_and_trigger_procurement(
                     UPDATE purchase_orders
                     SET status = 'SUSPENDED', total_amount = :total_amount,
                         risk_analysis_report = :risk_analysis_report,
-                        demand_reasoning = :demand_reasoning
+                        demand_reasoning = :demand_reasoning,
+                        suspended_virtual_date = :suspended_virtual_date
                     WHERE id = :order_id
                     """
                 ),
@@ -159,6 +161,7 @@ async def scan_and_trigger_procurement(
                     "total_amount": total_amount,
                     "risk_analysis_report": risk_analysis_report,
                     "demand_reasoning": run_result.get("demand_reasoning", ""),
+                    "suspended_virtual_date": get_current_date().isoformat(),
                     "order_id": order_id,
                 },
             )

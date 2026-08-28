@@ -60,6 +60,7 @@ CREATE TABLE purchase_orders (
     risk_reason VARCHAR(500) NULL,
     risk_analysis_report TEXT NULL,
     demand_reasoning TEXT NULL,
+    suspended_virtual_date DATE NULL,
     idempotency_key VARCHAR(128) NULL UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
