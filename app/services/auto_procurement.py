@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.graph.state import PurchaseState
 
 # 未完成采购单状态（用于避免重复触发）
-_PENDING_STATUSES = ("PENDING", "SUSPENDED", "RUNNING")
+_PENDING_STATUSES = ("PENDING", "SUSPENDED", "PURCHASE_CREATED", "RUNNING")
 
 
 async def _load_ingredient_bundle(db: AsyncSession, name: str) -> Dict[str, Any] | None:
@@ -150,13 +150,15 @@ async def scan_and_trigger_procurement(
                     """
                     UPDATE purchase_orders
                     SET status = 'SUSPENDED', total_amount = :total_amount,
-                        risk_analysis_report = :risk_analysis_report
+                        risk_analysis_report = :risk_analysis_report,
+                        demand_reasoning = :demand_reasoning
                     WHERE id = :order_id
                     """
                 ),
                 {
                     "total_amount": total_amount,
                     "risk_analysis_report": risk_analysis_report,
+                    "demand_reasoning": run_result.get("demand_reasoning", ""),
                     "order_id": order_id,
                 },
             )
@@ -221,13 +223,15 @@ async def scan_and_trigger_procurement(
             text(
                 """
                 UPDATE purchase_orders
-                SET status = :status, total_amount = :total_amount
+                SET status = :status, total_amount = :total_amount,
+                    demand_reasoning = :demand_reasoning
                 WHERE id = :order_id
                 """
             ),
             {
                 "status": final_status,
                 "total_amount": total_amount_auto,
+                "demand_reasoning": run_result.get("demand_reasoning", ""),
                 "order_id": order_id,
             },
         )

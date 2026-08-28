@@ -34,6 +34,7 @@ def _health(ratio: float) -> str:
 
 @router.get("")
 async def get_dashboard(db: AsyncSession = Depends(get_db)):
+    # ---------- 库存看板 ----------
     inv_result = await db.execute(
         text(
             """
@@ -65,11 +66,13 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             }
         )
 
+    # ---------- 采购订单列表 ----------
     order_result = await db.execute(
         text(
             """
             SELECT po.id, po.order_no, po.status, po.total_amount,
-                   po.risk_reason, po.risk_analysis_report,
+                   po.risk_reason, po.risk_analysis_report, po.demand_reasoning,
+                   po.created_at, po.updated_at,
                    poi.ingredient_id, poi.quantity
             FROM purchase_orders po
             LEFT JOIN purchase_order_items poi ON poi.order_id = po.id
@@ -83,23 +86,58 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     ).mappings()}
 
     orders: List[Dict[str, Any]] = []
+    total_orders = 0
+    auto_completed = 0
+    pending_count = 0
+    intercepted_count = 0
+    month_restock_amount = 0.0
+    current_date = get_current_date()
+    current_month_prefix = current_date.strftime("%Y-%m")
+
     for row in order_result.mappings():
-        ingredient_id = row["ingredient_id"]
+        total_orders += 1
+        status = row["status"]
+        total_amount = float(row["total_amount"]) if row["total_amount"] else 0.0
+        updated_at = row["updated_at"]
+
+        if status in ("COMPLETED", "PURCHASE_CREATED"):
+            auto_completed += 1
+        if status == "SUSPENDED":
+            pending_count += 1
+        if row["risk_analysis_report"] or row["risk_reason"]:
+            intercepted_count += 1
+        if status == "COMPLETED":
+            if updated_at and updated_at.strftime("%Y-%m") == current_month_prefix:
+                month_restock_amount += total_amount
+
         orders.append(
             {
                 "order_id": row["id"],
                 "order_no": row["order_no"],
-                "ingredient": name_map.get(ingredient_id, "未知") if ingredient_id else None,
+                "ingredient": name_map.get(row["ingredient_id"], "未知") if row["ingredient_id"] else None,
                 "quantity": float(row["quantity"]) if row["quantity"] else None,
-                "total_amount": float(row["total_amount"]) if row["total_amount"] else 0.0,
-                "status": row["status"],
+                "total_amount": total_amount,
+                "status": status,
                 "risk_reason": row["risk_reason"],
                 "risk_analysis_report": row["risk_analysis_report"],
+                "demand_reasoning": row["demand_reasoning"],
+                "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                "updated_at": updated_at.isoformat() if updated_at else None,
             }
         )
 
+    auto_rate = (auto_completed / total_orders * 100) if total_orders > 0 else 0.0
+
+    kpi = {
+        "auto_procurement_rate": round(auto_rate, 1),
+        "pending_approvals": pending_count,
+        "intercepted_risk_orders": intercepted_count,
+        "month_restock_amount": round(month_restock_amount, 2),
+    }
+
     return {
-        "virtual_date": get_current_date().isoformat(),
+        "virtual_date": current_date.isoformat(),
         "inventory": inventory,
         "orders": orders,
+        "kpi": kpi,
     }

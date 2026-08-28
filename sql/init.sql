@@ -59,6 +59,7 @@ CREATE TABLE purchase_orders (
     total_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
     risk_reason VARCHAR(500) NULL,
     risk_analysis_report TEXT NULL,
+    demand_reasoning TEXT NULL,
     idempotency_key VARCHAR(128) NULL UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
