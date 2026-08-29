@@ -344,11 +344,9 @@
     function openModal(){ openAddIngredientModal(); }
     function closeModal(){ closeAddIngredientModal(); }
     function val(id, d=0){ const el=document.getElementById(id); return parseFloat(el.value) || d; }
-    document.getElementById('btn-add-ingredient').addEventListener('click', openAddIngredientModal);
-    document.getElementById('ing-modal-close').addEventListener('click', closeAddIngredientModal);
-    document.getElementById('btn-cancel-ing').addEventListener('click', closeAddIngredientModal);
-    document.getElementById('ing-modal-mask').addEventListener('click', closeAddIngredientModal);
-    document.getElementById('btn-submit-ing').addEventListener('click', async ()=>{
+    // Modal 事件绑定改为按钮内联 onclick（见 HTML），避免 script 先于 Modal 渲染时的 null 引用错误
+    async function submitAddIngredient(event){
+      if(event) event.preventDefault();
       const name = document.getElementById('f-name').value.trim();
       if(!name){ showToast('请填写食材名称'); return; }
       // 前端数值>0 校验
@@ -377,18 +375,19 @@
         await loadDashboard();
       } catch(e){ showToast('新增失败：' + e.message); }
       finally { btn.disabled = false; btn.textContent = orig; }
-    });
+    }
+    window.submitAddIngredient = submitAddIngredient;
 
     loadDashboard().catch(e=>showToast('加载失败：'+e.message));
   </script>
 
   <!-- 新增食材 Modal -->
   <div id="ing-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
-    <div class="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" id="ing-modal-mask"></div>
+    <div class="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" id="ing-modal-mask" onclick="closeAddIngredientModal()"></div>
     <div class="relative bg-white w-full max-w-md mx-4 rounded-2xl shadow-2xl border border-slate-200 p-6">
       <div class="flex items-center justify-between mb-4">
         <h3 class="text-sm font-semibold text-slate-800">新增食材</h3>
-        <button id="ing-modal-close" class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400">
+        <button id="ing-modal-close" onclick="closeAddIngredientModal()" class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
@@ -429,8 +428,8 @@
         </div>
       </div>
       <div class="mt-5 flex justify-end gap-2">
-        <button id="btn-cancel-ing" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 text-sm font-medium hover:bg-slate-200 transition">取消</button>
-        <button id="btn-submit-ing" class="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 transition">添加食材</button>
+        <button id="btn-cancel-ing" onclick="closeAddIngredientModal()" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 text-sm font-medium hover:bg-slate-200 transition">取消</button>
+        <button id="btn-submit-ing" onclick="submitAddIngredient(event)" class="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 transition">添加食材</button>
       </div>
     </div>
   </div>
