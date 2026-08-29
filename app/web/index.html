@@ -342,14 +342,21 @@
     document.getElementById('btn-submit-ing').addEventListener('click', async ()=>{
       const name = document.getElementById('f-name').value.trim();
       if(!name){ showToast('请填写食材名称'); return; }
+      // 前端数值>0 校验
+      const stock=val('f-stock'), safety=val('f-safety'), daily=val('f-daily'), price=val('f-price');
+      if(stock<=0||safety<=0||daily<=0||price<=0){ showToast('库存/安全线/日消耗/单价需大于 0'); return; }
       const payload = {
         name,
         category: document.getElementById('f-category').value,
-        current_stock: val('f-stock'),
-        safety_stock: val('f-safety'),
-        daily_consumption: val('f-daily'),
-        unit_price: val('f-price'),
+        current_stock: stock,
+        safety_stock: safety,
+        daily_consumption: daily,
+        unit_price: price,
       };
+      const btn = document.getElementById('btn-submit-ing');
+      const orig = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '提交中…';
       try {
         const r = await fetch(API + '/ingredients', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
         const data = await r.json();
@@ -360,6 +367,7 @@
         document.getElementById('f-category').selectedIndex = 0;
         await loadDashboard();
       } catch(e){ showToast('新增失败：' + e.message); }
+      finally { btn.disabled = false; btn.textContent = orig; }
     });
 
     loadDashboard().catch(e=>showToast('加载失败：'+e.message));

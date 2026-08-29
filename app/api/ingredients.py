@@ -13,10 +13,10 @@ router = APIRouter(prefix="/ingredients", tags=["ingredients"])
 class IngredientCreate(BaseModel):
     name: str = Field(..., description="食材名称", min_length=1)
     category: Optional[str] = Field(default=None, description="分类，如：生鲜肉类/蔬菜时蔬/主食/调料")
-    current_stock: float = Field(default=0.0, ge=0, description="当前库存")
-    safety_stock: float = Field(default=0.0, ge=0, description="安全线库存")
-    daily_consumption: float = Field(default=0.0, ge=0, description="每日消耗量")
-    unit_price: float = Field(default=0.0, ge=0, description="当前单价")
+    current_stock: float = Field(..., gt=0, description="当前库存（必须大于 0）")
+    safety_stock: float = Field(..., gt=0, description="安全线库存（必须大于 0）")
+    daily_consumption: float = Field(..., gt=0, description="每日消耗量（必须大于 0）")
+    unit_price: float = Field(..., gt=0, description="当前单价（必须大于 0）")
     historical_price: Optional[float] = Field(default=None, description="历史均价；缺省按现价 80% 估算，便于触发风控 HITL")
 
 
