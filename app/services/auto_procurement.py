@@ -115,6 +115,7 @@ async def scan_and_trigger_procurement(
             "ingredient": bundle["ingredient_name"],
             "unit": bundle["unit"],
             "current_stock": float(bundle["current_stock"]),
+            "safety_stock": float(bundle["safety_stock"]),
             "daily_sales": float(bundle["daily_sales"]),
             "predicted_demand": 0.0,
             "quantity": 0.0,

@@ -10,6 +10,7 @@ class PurchaseState(TypedDict, total=False):
     unit: str
 
     current_stock: float
+    safety_stock: float
     daily_sales: float
     predicted_demand: float
     quantity: float

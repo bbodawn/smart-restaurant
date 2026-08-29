@@ -51,6 +51,8 @@ async def risk_agent(state: PurchaseState) -> dict:
     supplier_price = float(state["supplier_price"])
     historical_price = float(state["historical_price"])
     total_amount = float(state["total_amount"])
+    current_stock = float(state.get("current_stock", 0))
+    safety_stock = float(state.get("safety_stock", 0))
 
     if historical_price == 0:
         price_deviation = 0.0
@@ -62,6 +64,9 @@ async def risk_agent(state: PurchaseState) -> dict:
         reasons.append("PRICE_DEVIATION_GT_20%")
     if total_amount > 5000:
         reasons.append("ORDER_AMOUNT_GT_5000")
+    # 库存风控（新增）：当前库存低于或触及安全基线时自动挂起，防止急单履约风险
+    if safety_stock > 0 and current_stock <= safety_stock:
+        reasons.append("LOW_STOCK_BELOW_SAFETY")
 
     if not reasons:
         return {
@@ -72,31 +77,50 @@ async def risk_agent(state: PurchaseState) -> dict:
             "status": "APPROVED",
         }
 
-    risk_analysis_report = (
-        f"供应商「{state['supplier_name']}」报价 {supplier_price} 元/kg，"
-        f"历史均价 {historical_price} 元/kg，偏离 {price_deviation * 100:.1f}%，"
-        f"预测采购总额 {total_amount} 元，触发人工审批。"
-    )
+    # 确定性的结构化告警（保证低库存/价格风险格式稳定出现在报告中）
+    report_parts = []
+    if "LOW_STOCK_BELOW_SAFETY" in reasons:
+        drop_pct = 0.0
+        if safety_stock > 0:
+            drop_pct = max(0.0, (safety_stock - current_stock) / safety_stock * 100)
+        report_parts.append(
+            f"[低库存风险告警] 当前食材库存 ({current_stock}kg) 已低于安全基线 ({safety_stock}kg)，"
+            f"降幅达 {drop_pct:.0f}%。为防止急单履约风险，系统自动挂起，建议人工核对供应商到货时效与采购数量。"
+        )
+    if "PRICE_DEVIATION_GT_20%" in reasons:
+        report_parts.append(
+            f"[价格风险告警] 供应商「{state['supplier_name']}」报价 {supplier_price} 元/kg，"
+            f"历史均价 {historical_price} 元/kg，偏离 {price_deviation * 100:.1f}%，预测采购总额 {total_amount} 元。"
+        )
+    if "ORDER_AMOUNT_GT_5000" in reasons:
+        report_parts.append(f"[金额风险告警] 预测采购总额 {total_amount} 元，超过 5000 元阈值。")
+    risk_analysis_report = "\n".join(report_parts)
 
     try:
         llm = get_llm()
         reason_hint = "、".join(reasons)
+        low_stock_note = (
+            f"当前库存 {current_stock}kg 已低于安全基线 {safety_stock}kg（降幅 "
+            f"{(max(0.0, (safety_stock - current_stock) / safety_stock * 100) if safety_stock > 0 else 0.0):.0f}%）。"
+            if "LOW_STOCK_BELOW_SAFETY" in reasons else f"当前库存 {current_stock}kg，安全基线 {safety_stock}kg。"
+        )
         prompt = (
-            f"你是餐饮供应链风控分析师。请针对以下采购风险生成一段简明清晰的中文风控告警报告：\n"
+            f"你是餐饮供应链风控分析师。请针对以下采购风险补充一段简明清晰的中文分析（不重复标签）：\n"
             f"- 食材：{state['ingredient']}\n"
             f"- 采购数量：{state['quantity']}kg\n"
+            f"- 库存：{low_stock_note}\n"
             f"- 供应商：{state['supplier_name']}\n"
             f"- 当前报价：{supplier_price} 元/kg\n"
             f"- 历史均价：{historical_price} 元/kg\n"
             f"- 价格偏离度：{price_deviation * 100:.1f}%\n"
             f"- 预测采购总额：{total_amount} 元\n"
             f"- 触发风险项：{reason_hint}\n"
-            f"请明确指出风险点并给出是否建议放行的判断依据（100字以内）。"
+            f"请明确指出风险点并给出是否建议放行的判断依据（80字以内）。"
         )
         response = await llm.ainvoke(prompt)
         content = getattr(response, "content", None)
         if isinstance(content, str) and content.strip():
-            risk_analysis_report = content.strip()
+            risk_analysis_report = risk_analysis_report + "\n—— RiskAgent 补充分析 ——\n" + content.strip()
     except Exception:
         pass
 
