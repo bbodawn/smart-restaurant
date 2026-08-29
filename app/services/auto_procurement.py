@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import get_current_date
 from app.graph.state import PurchaseState
+from app.services.inventory import execute_inbound_stock
 
 # 未完成采购单状态（用于避免重复触发）
 _PENDING_STATUSES = ("PENDING", "SUSPENDED", "PURCHASE_CREATED", "RUNNING")
@@ -222,40 +223,46 @@ async def scan_and_trigger_procurement(
                 },
             )
 
-        # 低库存自动放行（无需人工审批的采购）直接完成入库补货，
-        # 避免只生成订单而库存未回补（如价格偏离小、金额低的食材）。
-        if final_status in ("PURCHASE_CREATED", "APPROVED") and quantity_auto > 0:
+        # 低风险自动放行（无需人工审批）直接调用强绑定物理入库，
+        # 库存原子累加 + 订单置 COMPLETED + 写 completed_at + commit。
+        # 该路径只在有实际采购量时入库；NO_PURCHASE(quantity=0) 不涉及库存。
+        if quantity_auto > 0:
+            inbound = await execute_inbound_stock(db, order_id)
+            final_status = "COMPLETED"
+            # 补写需求推理等附加信息
             await db.execute(
                 text(
                     """
-                    UPDATE inventory
-                    SET current_stock = current_stock + :quantity
-                    WHERE ingredient_id = :ingredient_id
+                    UPDATE purchase_orders
+                    SET total_amount = :total_amount, demand_reasoning = :demand_reasoning
+                    WHERE id = :order_id
                     """
                 ),
                 {
-                    "quantity": quantity_auto,
-                    "ingredient_id": int(bundle["ingredient_id"]),
+                    "total_amount": total_amount_auto,
+                    "demand_reasoning": run_result.get("demand_reasoning", ""),
+                    "order_id": order_id,
                 },
             )
-
-        await db.execute(
-            text(
-                """
-                UPDATE purchase_orders
-                SET status = :status, total_amount = :total_amount,
-                    demand_reasoning = :demand_reasoning
-                WHERE id = :order_id
-                """
-            ),
-            {
-                "status": final_status,
-                "total_amount": total_amount_auto,
-                "demand_reasoning": run_result.get("demand_reasoning", ""),
-                "order_id": order_id,
-            },
-        )
-        await db.commit()
+            await db.commit()
+        else:
+            await db.execute(
+                text(
+                    """
+                    UPDATE purchase_orders
+                    SET status = :status, total_amount = :total_amount,
+                        demand_reasoning = :demand_reasoning
+                    WHERE id = :order_id
+                    """
+                ),
+                {
+                    "status": final_status,
+                    "total_amount": total_amount_auto,
+                    "demand_reasoning": run_result.get("demand_reasoning", ""),
+                    "order_id": order_id,
+                },
+            )
+            await db.commit()
 
         triggered.append(
             {

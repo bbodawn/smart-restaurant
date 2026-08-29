@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from langgraph.types import Command
 
 from app.core.db import get_db
+from app.services.inventory import execute_inbound_stock
 from app.core.idempotency import (
     check_idempotency,
     clear_idempotency,
@@ -344,43 +345,18 @@ async def approve_purchase_order(
                 config=config,
             )
 
-            # 2. 更新订单状态为 COMPLETED
-            new_status = "COMPLETED"
-            await db.execute(
-                text(
-                    """
-                    UPDATE purchase_orders
-                    SET status = :status
-                    WHERE id = :order_id AND status = 'SUSPENDED'
-                    """
-                ),
-                {"status": new_status, "order_id": order_id},
-            )
-
-            # 3. 自动入库补库存：current_stock += quantity
-            if ingredient_id is not None and quantity > 0:
-                await db.execute(
-                    text(
-                        """
-                        UPDATE inventory
-                        SET current_stock = current_stock + :quantity
-                        WHERE ingredient_id = :ingredient_id
-                        """
-                    ),
-                    {"quantity": quantity, "ingredient_id": ingredient_id},
-                )
-
-            await db.commit()
+            # 2. 调用强绑定物理入库：库存累加 + 标 COMPLETED + 写 completed_at + commit
+            inbound = await execute_inbound_stock(db, order_id)
 
             return {
-                "status": new_status,
+                "status": "COMPLETED",
                 "order_id": order_id,
                 "order_no": order["order_no"],
                 "thread_id": order["thread_id"],
                 "approved": True,
                 "approval_reason": request_body.approval_reason,
-                "restocked_quantity": quantity,
-                "current_stock": await _get_current_stock(db, order_id),
+                "restocked_quantity": inbound.get("restocked_quantity", 0),
+                "current_stock": inbound.get("current_stock"),
             }
 
         # approved == False -> REJECTED

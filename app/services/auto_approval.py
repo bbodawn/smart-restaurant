@@ -6,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import get_current_date
+from app.services.inventory import execute_inbound_stock
 
 # 挂起单超过该虚拟天数（业务天数）仍未人工审批，则自动放行补库存
 AUTO_APPROVE_AFTER_DAYS = int(os.getenv("AUTO_APPROVE_AFTER_DAYS", "3"))
@@ -14,52 +15,14 @@ AUTO_APPROVE_AFTER_DAYS = int(os.getenv("AUTO_APPROVE_AFTER_DAYS", "3"))
 async def _complete_and_restock(
     db: AsyncSession, graph: Any, order_id: int, thread_id: str
 ) -> Dict[str, Any]:
-    """恢复状态机、置为 COMPLETED 并回补库存。"""
-    item_result = await db.execute(
-        text(
-            """
-            SELECT ingredient_id, quantity
-            FROM purchase_order_items
-            WHERE order_id = :order_id
-            LIMIT 1
-            """
-        ),
-        {"order_id": order_id},
-    )
-    item = item_result.mappings().first()
-
+    """恢复状态机，然后通过强绑定物理入库补齐库存并置 COMPLETED。"""
     config = {"configurable": {"thread_id": thread_id}}
     await graph.ainvoke(Command(resume={"approved": True}), config=config)
 
-    quantity = float(item["quantity"]) if item else 0.0
-    ingredient_id = int(item["ingredient_id"]) if item else None
-
-    await db.execute(
-        text(
-            """
-            UPDATE purchase_orders
-            SET status = 'COMPLETED', suspended_virtual_date = NULL
-            WHERE id = :order_id AND status = 'SUSPENDED'
-            """
-        ),
-        {"order_id": order_id},
-    )
-    if ingredient_id is not None and quantity > 0:
-        await db.execute(
-            text(
-                """
-                UPDATE inventory
-                SET current_stock = current_stock + :quantity
-                WHERE ingredient_id = :ingredient_id
-                """
-            ),
-            {"quantity": quantity, "ingredient_id": ingredient_id},
-        )
-    await db.commit()
-
+    inbound = await execute_inbound_stock(db, order_id)
     return {
         "order_id": order_id,
-        "restocked_quantity": quantity,
+        "restocked_quantity": inbound.get("restocked_quantity", 0),
         "status": "COMPLETED",
     }
 
