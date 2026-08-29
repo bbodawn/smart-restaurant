@@ -344,7 +344,7 @@
       if(!name){ showToast('请填写食材名称'); return; }
       const payload = {
         name,
-        category: document.getElementById('f-category').value.trim() || null,
+        category: document.getElementById('f-category').value,
         current_stock: val('f-stock'),
         safety_stock: val('f-safety'),
         daily_consumption: val('f-daily'),
@@ -354,9 +354,10 @@
         const r = await fetch(API + '/ingredients', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
         const data = await r.json();
         if(!r.ok) throw new Error(data.detail || r.statusText);
-        showToast('已新增食材：' + data.name);
+        showToast('食材添加成功：' + data.name);
         closeModal();
-        ['f-name','f-category','f-stock','f-safety','f-daily','f-price'].forEach(id=>document.getElementById(id).value='');
+        ['f-name','f-stock','f-safety','f-daily','f-price'].forEach(id=>document.getElementById(id).value='');
+        document.getElementById('f-category').selectedIndex = 0;
         await loadDashboard();
       } catch(e){ showToast('新增失败：' + e.message); }
     });
@@ -381,7 +382,13 @@
         </div>
         <div>
           <label class="text-xs text-slate-500 block mb-1">分类</label>
-          <input id="f-category" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" placeholder="如：生鲜肉类" />
+          <select id="f-category" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-slate-400">
+            <option value="主食">主食</option>
+            <option value="生鲜肉类">生鲜肉类</option>
+            <option value="水产海鲜">水产海鲜</option>
+            <option value="蔬菜时蔬">蔬菜时蔬</option>
+            <option value="调料">调料</option>
+          </select>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
