@@ -73,7 +73,13 @@
     <section>
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-sm font-semibold text-slate-800 uppercase tracking-wide">食材库存健康度</h2>
-        <span class="text-xs text-slate-400">当前库存 / 安全线比率</span>
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-slate-400">当前库存 / 安全线比率</span>
+          <button id="btn-add-ingredient" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-100 transition">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            新增食材
+          </button>
+        </div>
       </div>
       <div id="inventory-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4"></div>
     </section>
@@ -324,7 +330,85 @@
 
     document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click', ()=>{ activeTab = b.dataset.tab; renderTabs(); renderOrders(); }));
 
+    // ---- 新增食材 Modal ----
+    const modal = document.getElementById('ing-modal');
+    function openModal(){ modal.classList.remove('hidden'); modal.classList.add('flex'); }
+    function closeModal(){ modal.classList.add('hidden'); modal.classList.remove('flex'); }
+    function val(id, d=0){ const el=document.getElementById(id); return parseFloat(el.value) || d; }
+    document.getElementById('btn-add-ingredient').addEventListener('click', openModal);
+    document.getElementById('ing-modal-close').addEventListener('click', closeModal);
+    document.getElementById('btn-cancel-ing').addEventListener('click', closeModal);
+    document.getElementById('ing-modal-mask').addEventListener('click', closeModal);
+    document.getElementById('btn-submit-ing').addEventListener('click', async ()=>{
+      const name = document.getElementById('f-name').value.trim();
+      if(!name){ showToast('请填写食材名称'); return; }
+      const payload = {
+        name,
+        category: document.getElementById('f-category').value.trim() || null,
+        current_stock: val('f-stock'),
+        safety_stock: val('f-safety'),
+        daily_consumption: val('f-daily'),
+        unit_price: val('f-price'),
+      };
+      try {
+        const r = await fetch(API + '/ingredients', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const data = await r.json();
+        if(!r.ok) throw new Error(data.detail || r.statusText);
+        showToast('已新增食材：' + data.name);
+        closeModal();
+        ['f-name','f-category','f-stock','f-safety','f-daily','f-price'].forEach(id=>document.getElementById(id).value='');
+        await loadDashboard();
+      } catch(e){ showToast('新增失败：' + e.message); }
+    });
+
     loadDashboard().catch(e=>showToast('加载失败：'+e.message));
   </script>
+
+  <!-- 新增食材 Modal -->
+  <div id="ing-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
+    <div class="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" id="ing-modal-mask"></div>
+    <div class="relative bg-white w-full max-w-md mx-4 rounded-2xl shadow-2xl border border-slate-200 p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-semibold text-slate-800">新增食材</h3>
+        <button id="ing-modal-close" class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs text-slate-500 block mb-1">食材名称 *</label>
+          <input id="f-name" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" placeholder="如：鲜嫩牛肉丸" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-500 block mb-1">分类</label>
+          <input id="f-category" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" placeholder="如：生鲜肉类" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-slate-500 block mb-1">当前库存 (kg)</label>
+            <input id="f-stock" type="number" step="0.01" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+          </div>
+          <div>
+            <label class="text-xs text-slate-500 block mb-1">安全线 (kg)</label>
+            <input id="f-safety" type="number" step="0.01" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-slate-500 block mb-1">日消耗 (kg)</label>
+            <input id="f-daily" type="number" step="0.01" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+          </div>
+          <div>
+            <label class="text-xs text-slate-500 block mb-1">单价 (¥/kg)</label>
+            <input id="f-price" type="number" step="0.01" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+          </div>
+        </div>
+      </div>
+      <div class="mt-5 flex justify-end gap-2">
+        <button id="btn-cancel-ing" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 text-sm font-medium hover:bg-slate-200 transition">取消</button>
+        <button id="btn-submit-ing" class="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 transition">添加食材</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

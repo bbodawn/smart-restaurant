@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 
 from app.api.dashboard import router as dashboard_router
+from app.api.ingredients import router as ingredients_router
 from app.api.intent import router as intent_router
 from app.api.purchase import router as purchase_router
 from app.api.test_time import router as test_time_router
@@ -40,6 +41,7 @@ app.include_router(purchase_router, prefix="/api/v1")
 app.include_router(intent_router, prefix="/api/v1")
 app.include_router(test_time_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
+app.include_router(ingredients_router, prefix="/api/v1")
 
 @app.get("/", include_in_schema=False)
 async def dashboard_page():

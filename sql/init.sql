@@ -18,6 +18,7 @@ CREATE TABLE ingredients (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(50) NOT NULL UNIQUE,
     unit VARCHAR(20) NOT NULL,
+    category VARCHAR(50) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
@@ -96,18 +97,18 @@ CREATE TABLE purchase_order_items (
 ) ENGINE=InnoDB;
 
 -- ============ Day 4 种子数据：10 种典型餐饮食材 ============
-INSERT INTO ingredients (name, unit)
+INSERT INTO ingredients (name, unit, category)
 VALUES
-('东北大米', 'kg'),
-('面粉', 'kg'),
-('优质猪肉', 'kg'),
-('鲜嫩鸡胸肉', 'kg'),
-('原切雪花牛肉', 'kg'),
-('冰鲜基围虾', 'kg'),
-('有机菜心', 'kg'),
-('高山土豆', 'kg'),
-('非转基因大豆油', 'L'),
-('招牌特调酱油', 'L');
+('东北大米', 'kg', '主食'),
+('面粉', 'kg', '主食'),
+('优质猪肉', 'kg', '生鲜肉类'),
+('鲜嫩鸡胸肉', 'kg', '生鲜肉类'),
+('原切雪花牛肉', 'kg', '生鲜肉类'),
+('冰鲜基围虾', 'kg', '水产海鲜'),
+('有机菜心', 'kg', '蔬菜时蔬'),
+('高山土豆', 'kg', '蔬菜时蔬'),
+('非转基因大豆油', 'L', '调料'),
+('招牌特调酱油', 'L', '调料');
 
 -- 库存：当前库存、日消耗、安全线（默认已为健康状态：current_stock > safety_stock）
 INSERT INTO inventory (ingredient_id, current_stock, daily_sales, safety_stock)
