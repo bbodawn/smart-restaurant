@@ -336,6 +336,7 @@
     function openAddIngredientModal(){
       const m = document.getElementById('ing-modal');
       if(m){ m.classList.remove('hidden'); m.classList.add('flex'); }
+      onCategoryChange();
     }
     function closeAddIngredientModal(){
       const m = document.getElementById('ing-modal');
@@ -344,6 +345,32 @@
     function openModal(){ openAddIngredientModal(); }
     function closeModal(){ closeAddIngredientModal(); }
     function val(id, d=0){ const el=document.getElementById(id); return parseFloat(el.value) || d; }
+    // 分类 -> 预设标签 & 单位 映射
+    const CAT_META = {
+      '主食':      { unit:'kg', tags:['高筋面粉','五常大米','手工水饺','意面','燕麦'] },
+      '生鲜肉类':  { unit:'kg', tags:['原切雪花牛肉','特级猪五花','鲜嫩鸡胸肉','羊肉卷'] },
+      '水产海鲜':  { unit:'kg', tags:['冰鲜基围虾','三文鱼排','罗非鱼片','鲜活生蚝'] },
+      '蔬菜时蔬':  { unit:'kg', tags:['有机菜心','高山土豆','罗马生菜','西兰花'] },
+      '调料':      { unit:'L',  tags:['招牌特调酱油','非转基因大豆油','特级香醋','蚝油','食用海盐'] },
+    };
+    const DEFAULT_CAT = '主食';
+    function fillName(v){
+      const n = document.getElementById('f-name');
+      n.value = v;
+      n.focus();
+    }
+    // 分类切换联动：更新名称快捷标签 + 单位显示
+    function onCategoryChange(){
+      const cat = document.getElementById('f-category').value || DEFAULT_CAT;
+      const meta = CAT_META[cat] || { unit:'kg', tags:[] };
+      ['lbl-stock','lbl-safety','lbl-daily'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent = meta.unit; });
+      const lp = document.getElementById('lbl-price'); if(lp) lp.textContent = '¥/' + meta.unit;
+      const tg = document.getElementById('preset-tags');
+      if(tg){
+        tg.innerHTML = meta.tags.map(t => `<span class="inline-block px-2.5 py-1 rounded-full text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-pointer hover:bg-emerald-100 transition" onclick="fillName('${t}')">${t}</span>`).join(' ');
+        if(meta.tags.length===0){ tg.innerHTML = '<span class="text-xs text-slate-400">无预设，可手动输入</span>'; }
+      }
+    }
     // Modal 事件绑定改为按钮内联 onclick（见 HTML），避免 script 先于 Modal 渲染时的 null 引用错误
     async function submitAddIngredient(event){
       if(event) event.preventDefault();
@@ -355,6 +382,7 @@
       const payload = {
         name,
         category: document.getElementById('f-category').value,
+        unit: (CAT_META[document.getElementById('f-category').value] || {unit:'kg'}).unit,
         current_stock: stock,
         safety_stock: safety,
         daily_consumption: daily,
@@ -372,6 +400,7 @@
         closeModal();
         ['f-name','f-stock','f-safety','f-daily','f-price'].forEach(id=>document.getElementById(id).value='');
         document.getElementById('f-category').selectedIndex = 0;
+        onCategoryChange();
         await loadDashboard();
       } catch(e){ showToast('新增失败：' + e.message); }
       finally { btn.disabled = false; btn.textContent = orig; }
@@ -394,11 +423,12 @@
       <div class="space-y-3">
         <div>
           <label class="text-xs text-slate-500 block mb-1">食材名称 *</label>
-          <input id="f-name" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" placeholder="如：鲜嫩牛肉丸" />
+          <input id="f-name" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" placeholder="点击下方标签快捷选择，或手动输入" />
+          <div id="preset-tags" class="mt-2 flex flex-wrap gap-1.5"></div>
         </div>
         <div>
           <label class="text-xs text-slate-500 block mb-1">分类</label>
-          <select id="f-category" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-slate-400">
+          <select id="f-category" onchange="onCategoryChange(event)" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-slate-400">
             <option value="主食">主食</option>
             <option value="生鲜肉类">生鲜肉类</option>
             <option value="水产海鲜">水产海鲜</option>
@@ -408,21 +438,21 @@
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-xs text-slate-500 block mb-1">当前库存 (kg)</label>
+            <label class="text-xs text-slate-500 block mb-1">当前库存 <span id="lbl-stock" class="text-slate-400">kg</span></label>
             <input id="f-stock" type="number" step="0.01" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
           </div>
           <div>
-            <label class="text-xs text-slate-500 block mb-1">安全线 (kg)</label>
+            <label class="text-xs text-slate-500 block mb-1">安全线 <span id="lbl-safety" class="text-slate-400">kg</span></label>
             <input id="f-safety" type="number" step="0.01" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-xs text-slate-500 block mb-1">日消耗 (kg)</label>
+            <label class="text-xs text-slate-500 block mb-1">日消耗 <span id="lbl-daily" class="text-slate-400">kg</span></label>
             <input id="f-daily" type="number" step="0.01" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
           </div>
           <div>
-            <label class="text-xs text-slate-500 block mb-1">单价 (¥/kg)</label>
+            <label class="text-xs text-slate-500 block mb-1">单价 <span id="lbl-price" class="text-slate-400">¥/kg</span></label>
             <input id="f-price" type="number" step="0.01" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
           </div>
         </div>

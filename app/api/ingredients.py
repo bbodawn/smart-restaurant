@@ -17,6 +17,7 @@ class IngredientCreate(BaseModel):
     safety_stock: float = Field(..., gt=0, description="安全线库存（必须大于 0）")
     daily_consumption: float = Field(..., gt=0, description="每日消耗量（必须大于 0）")
     unit_price: float = Field(..., gt=0, description="当前单价（必须大于 0）")
+    unit: str = Field(default="kg", description="计量单位，如 kg / L，缺省 kg")
     historical_price: Optional[float] = Field(default=None, description="历史均价；缺省按现价 80% 估算，便于触发风控 HITL")
 
 
@@ -34,7 +35,7 @@ async def create_ingredient(
     if exists is not None:
         raise HTTPException(status_code=409, detail=f"食材「{name}」已存在")
 
-    unit = "kg"
+    unit = (request.unit or "kg").strip() or "kg"
     historical = request.historical_price
     if historical is None:
         historical = round(request.unit_price * 0.8, 2)
