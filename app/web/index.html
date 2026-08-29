@@ -363,7 +363,7 @@
     function onCategoryChange(){
       const cat = document.getElementById('f-category').value || DEFAULT_CAT;
       const meta = CAT_META[cat] || { unit:'kg', tags:[] };
-      ['lbl-stock','lbl-safety','lbl-daily'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent = meta.unit; });
+      ['unit-stock','unit-safety','unit-daily'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent = meta.unit; });
       const lp = document.getElementById('lbl-price'); if(lp) lp.textContent = '¥/' + meta.unit;
       const tg = document.getElementById('preset-tags');
       if(tg){
@@ -402,10 +402,28 @@
         document.getElementById('f-category').selectedIndex = 0;
         onCategoryChange();
         await loadDashboard();
-      } catch(e){ showToast('新增失败：' + e.message); }
+      } catch(e){
+        // 失败：原位红字提示，保持 Modal 打开
+        const errEl = document.getElementById('modal-error-msg');
+        if(errEl){
+          errEl.textContent = e.message || '添加失败';
+          errEl.classList.remove('hidden');
+        } else {
+          showToast('新增失败：' + e.message);
+        }
+      }
       finally { btn.disabled = false; btn.textContent = orig; }
     }
     window.submitAddIngredient = submitAddIngredient;
+
+    // 输入时隐藏原位错误提示
+    function hideIngError(){
+      const errEl = document.getElementById('modal-error-msg');
+      if(errEl) errEl.classList.add('hidden');
+    }
+    // 暴露数据刷新接口（供提交成功后调用）
+    window.fetchDashboardData = loadDashboard;
+    window.hideIngError = hideIngError;
 
     loadDashboard().catch(e=>showToast('加载失败：'+e.message));
   </script>
@@ -423,7 +441,8 @@
       <div class="space-y-3">
         <div>
           <label class="text-xs text-slate-500 block mb-1">食材名称 *</label>
-          <input id="f-name" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" placeholder="点击下方标签快捷选择，或手动输入" />
+          <input id="f-name" oninput="hideIngError()" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" placeholder="点击下方标签快捷选择，或手动输入" />
+          <p id="modal-error-msg" class="text-red-500 text-xs mt-1 hidden"></p>
           <div id="preset-tags" class="mt-2 flex flex-wrap gap-1.5"></div>
         </div>
         <div>
@@ -438,18 +457,27 @@
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-xs text-slate-500 block mb-1">当前库存 <span id="lbl-stock" class="text-slate-400">kg</span></label>
-            <input id="f-stock" type="number" step="0.01" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+            <label class="text-xs text-slate-500 block mb-1">当前库存</label>
+            <div class="flex items-center gap-1.5">
+              <input id="f-stock" type="number" step="0.01" class="flex-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+              <span class="unit-label text-xs text-slate-400 w-8 text-center" id="unit-stock">kg</span>
+            </div>
           </div>
           <div>
-            <label class="text-xs text-slate-500 block mb-1">安全线 <span id="lbl-safety" class="text-slate-400">kg</span></label>
-            <input id="f-safety" type="number" step="0.01" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+            <label class="text-xs text-slate-500 block mb-1">安全线</label>
+            <div class="flex items-center gap-1.5">
+              <input id="f-safety" type="number" step="0.01" class="flex-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+              <span class="unit-label text-xs text-slate-400 w-8 text-center" id="unit-safety">kg</span>
+            </div>
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-xs text-slate-500 block mb-1">日消耗 <span id="lbl-daily" class="text-slate-400">kg</span></label>
-            <input id="f-daily" type="number" step="0.01" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+            <label class="text-xs text-slate-500 block mb-1">日消耗</label>
+            <div class="flex items-center gap-1.5">
+              <input id="f-daily" type="number" step="0.01" class="flex-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+              <span class="unit-label text-xs text-slate-400 w-8 text-center" id="unit-daily">kg</span>
+            </div>
           </div>
           <div>
             <label class="text-xs text-slate-500 block mb-1">单价 <span id="lbl-price" class="text-slate-400">¥/kg</span></label>
