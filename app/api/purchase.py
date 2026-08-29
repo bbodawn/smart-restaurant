@@ -320,11 +320,27 @@ async def approve_purchase_order(
         item = item_result.mappings().first()
 
         if request_body.approved:
-            # 1. 恢复 LangGraph 状态机
+            # 0. 从数据库重建完整 PurchaseState（checkpoint 可能因 Redis 清空而缺失部分字段）
+            ingredient_id = int(item["ingredient_id"]) if item else None
+            quantity = float(item["quantity"]) if item else 0.0
+            snapshot = await _load_resume_state(db, ingredient_id) if ingredient_id else {}
+
+            # 1. 恢复 LangGraph 状态机（显式注入完整 state，保证即使 checkpoint 丢失也能 resume）
             graph = request.app.state.graph
             config = {"configurable": {"thread_id": order["thread_id"]}}
+            resume_state = {
+                "order_id": order_id,
+                "order_no": order["order_no"],
+                "thread_id": order["thread_id"],
+                "status": "SUSPENDED",
+            }
+            resume_state.update(snapshot)
+            resume_state["quantity"] = quantity
+            resume_state["total_amount"] = float(
+                (await db.execute(text("SELECT total_amount FROM purchase_orders WHERE id=:i"), {"i": order_id})).scalar() or 0
+            )
             await graph.ainvoke(
-                Command(resume={"approved": True}),
+                Command(resume={"approved": True}, update=resume_state),
                 config=config,
             )
 
@@ -342,8 +358,6 @@ async def approve_purchase_order(
             )
 
             # 3. 自动入库补库存：current_stock += quantity
-            ingredient_id = int(item["ingredient_id"]) if item else None
-            quantity = float(item["quantity"]) if item else 0.0
             if ingredient_id is not None and quantity > 0:
                 await db.execute(
                     text(
@@ -417,3 +431,62 @@ async def _get_current_stock(db: AsyncSession, order_id: int):
     )
     row = result.mappings().first()
     return float(row["stock"]) if row else None
+
+
+async def _load_resume_state(db: AsyncSession, ingredient_id: int) -> dict:
+    """从数据库重建该食材的完整采购状态快照，供订单审批恢复状态机使用。
+
+    当 LangGraph checkpoint（Redis）因重启/清空而缺失状态时，用数据库数据补齐，
+    保证 resume 不需要依赖云端缓存即可找到所有必需字段。
+    """
+    result = await db.execute(
+        text(
+            """
+            SELECT
+                i.id AS ingredient_id,
+                i.name AS ingredient_name,
+                i.unit,
+                inv.current_stock,
+                inv.daily_sales,
+                inv.safety_stock,
+                s.id AS supplier_id,
+                s.name AS supplier_name,
+                s.current_price,
+                s.historical_avg_price
+            FROM ingredients i
+            JOIN inventory inv ON inv.ingredient_id = i.id
+            JOIN suppliers s ON s.ingredient_id = i.id
+            WHERE i.id = :ingredient_id
+            LIMIT 1
+            """
+        ),
+        {"ingredient_id": ingredient_id},
+    )
+    row = result.mappings().first()
+    if row is None:
+        return {}
+
+    price = float(row["current_price"])
+    historical = float(row["historical_avg_price"])
+    price_deviation = (abs(price - historical) / historical) if historical else 0.0
+    daily_sales = float(row["daily_sales"])
+
+    return {
+        "ingredient_id": int(row["ingredient_id"]),
+        "ingredient": row["ingredient_name"],
+        "unit": row["unit"],
+        "current_stock": float(row["current_stock"]),
+        "daily_sales": daily_sales,
+        "predicted_demand": daily_sales * 3,
+        "quantity": 0.0,
+        "demand_reasoning": "",
+        "supplier_id": int(row["supplier_id"]),
+        "supplier_name": row["supplier_name"],
+        "supplier_price": price,
+        "historical_price": historical,
+        "price_deviation": price_deviation,
+        "total_amount": 0.0,
+        "risk_analysis_report": None,
+        "risk_reason": None,
+        "approved": None,
+    }
