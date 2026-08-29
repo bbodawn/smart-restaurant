@@ -75,7 +75,7 @@
         <h2 class="text-sm font-semibold text-slate-800 uppercase tracking-wide">食材库存健康度</h2>
         <div class="flex items-center gap-3">
           <span class="text-xs text-slate-400">当前库存 / 安全线比率</span>
-          <button id="btn-add-ingredient" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-100 transition">
+          <button id="btn-add-ingredient" onclick="openAddIngredientModal()" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-100 transition">
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
             新增食材
           </button>
@@ -331,14 +331,23 @@
     document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click', ()=>{ activeTab = b.dataset.tab; renderTabs(); renderOrders(); }));
 
     // ---- 新增食材 Modal ----
-    const modal = document.getElementById('ing-modal');
-    function openModal(){ modal.classList.remove('hidden'); modal.classList.add('flex'); }
-    function closeModal(){ modal.classList.add('hidden'); modal.classList.remove('flex'); }
+    // 打开/关闭函数在每次调用时重新获取 DOM 节点，
+    // 避免脚本初始化时 Modal 尚未渲染导致 modal 变量为 null。
+    function openAddIngredientModal(){
+      const m = document.getElementById('ing-modal');
+      if(m){ m.classList.remove('hidden'); m.classList.add('flex'); }
+    }
+    function closeAddIngredientModal(){
+      const m = document.getElementById('ing-modal');
+      if(m){ m.classList.add('hidden'); m.classList.remove('flex'); }
+    }
+    function openModal(){ openAddIngredientModal(); }
+    function closeModal(){ closeAddIngredientModal(); }
     function val(id, d=0){ const el=document.getElementById(id); return parseFloat(el.value) || d; }
-    document.getElementById('btn-add-ingredient').addEventListener('click', openModal);
-    document.getElementById('ing-modal-close').addEventListener('click', closeModal);
-    document.getElementById('btn-cancel-ing').addEventListener('click', closeModal);
-    document.getElementById('ing-modal-mask').addEventListener('click', closeModal);
+    document.getElementById('btn-add-ingredient').addEventListener('click', openAddIngredientModal);
+    document.getElementById('ing-modal-close').addEventListener('click', closeAddIngredientModal);
+    document.getElementById('btn-cancel-ing').addEventListener('click', closeAddIngredientModal);
+    document.getElementById('ing-modal-mask').addEventListener('click', closeAddIngredientModal);
     document.getElementById('btn-submit-ing').addEventListener('click', async ()=>{
       const name = document.getElementById('f-name').value.trim();
       if(!name){ showToast('请填写食材名称'); return; }
