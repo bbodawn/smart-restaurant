@@ -31,11 +31,17 @@ async def demand_agent(state: PurchaseState) -> dict:
 async def inventory_agent(state: PurchaseState) -> dict:
     current_stock = float(state["current_stock"])
     predicted_demand = float(state["predicted_demand"])
+    safety_stock = float(state.get("safety_stock", 0) or 0)
 
-    if current_stock >= predicted_demand:
+    # 只有库存既能覆盖短期预测需求、又高于安全线时，才判定无需采购。
+    # 否则（尤其当库存已低于安全线）必须进入采购 → RiskAgent 低库存挂起。
+    if current_stock >= predicted_demand and current_stock > safety_stock:
         return {"quantity": 0.0, "status": "NO_PURCHASE"}
 
+    # 补货量至少覆盖缺口补回安全线，避免只覆盖短期需求导致低频反复触发
     quantity = predicted_demand - current_stock
+    if safety_stock > 0 and safety_stock - current_stock > quantity:
+        quantity = safety_stock - current_stock
     return {"quantity": quantity, "status": "NEED_PURCHASE"}
 
 async def supplier_agent(state: PurchaseState) -> dict:
