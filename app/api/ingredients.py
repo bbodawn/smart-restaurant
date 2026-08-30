@@ -98,3 +98,112 @@ async def create_ingredient(
         "unit_price": request.unit_price,
         "historical_avg_price": historical,
     }
+
+
+class IngredientUpdate(BaseModel):
+    current_stock: Optional[float] = Field(default=None, gt=0, description="当前库存")
+    safety_stock: Optional[float] = Field(default=None, gt=0, description="安全线库存")
+    daily_consumption: Optional[float] = Field(default=None, gt=0, description="每日消耗量")
+    unit_price: Optional[float] = Field(default=None, gt=0, description="采购单价")
+
+
+@router.put("/{ingredient_id}")
+async def update_ingredient(
+    ingredient_id: int,
+    request: IngredientUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    ing = (
+        await db.execute(text("SELECT id FROM ingredients WHERE id = :id LIMIT 1"), {"id": ingredient_id})
+    ).mappings().first()
+    if ing is None:
+        raise HTTPException(status_code=404, detail=f"食材 id={ingredient_id} 不存在")
+
+    updates = {}
+    if request.current_stock is not None:
+        updates["current_stock"] = request.current_stock
+    if request.safety_stock is not None:
+        updates["safety_stock"] = request.safety_stock
+    if request.daily_consumption is not None:
+        updates["daily_sales"] = request.daily_consumption
+
+    try:
+        if updates:
+            cols = ", ".join(f"{k} = :{k}" for k in updates)
+            await db.execute(
+                text(f"UPDATE inventory SET {cols} WHERE ingredient_id = :ingredient_id"),
+                {**updates, "ingredient_id": ingredient_id},
+            )
+        if request.unit_price is not None:
+            await db.execute(
+                text("UPDATE suppliers SET current_price = :p WHERE ingredient_id = :ingredient_id"),
+                {"p": request.unit_price, "ingredient_id": ingredient_id},
+            )
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update ingredient: {exc}")
+
+    # 返回最新数据
+    result = await db.execute(
+        text(
+            """
+            SELECT i.id, i.name, i.unit, i.category, inv.current_stock, inv.safety_stock,
+                   inv.daily_sales, s.current_price, s.historical_avg_price
+            FROM ingredients i
+            JOIN inventory inv ON inv.ingredient_id = i.id
+            JOIN suppliers s ON s.ingredient_id = i.id
+            WHERE i.id = :id LIMIT 1
+            """
+        ),
+        {"id": ingredient_id},
+    )
+    row = result.mappings().first()
+    return {
+        "ingredient_id": row["id"],
+        "name": row["name"],
+        "unit": row["unit"],
+        "category": row["category"],
+        "current_stock": float(row["current_stock"]),
+        "safety_stock": float(row["safety_stock"]),
+        "daily_consumption": float(row["daily_sales"]),
+        "unit_price": float(row["current_price"]),
+        "historical_avg_price": float(row["historical_avg_price"]),
+    }
+
+
+@router.delete("/{ingredient_id}")
+async def delete_ingredient(
+    ingredient_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    ing = (
+        await db.execute(text("SELECT id, name FROM ingredients WHERE id = :id LIMIT 1"), {"id": ingredient_id})
+    ).mappings().first()
+    if ing is None:
+        raise HTTPException(status_code=404, detail=f"食材 id={ingredient_id} 不存在")
+
+    try:
+        # 取消关联的未完成采购单（SUSPENDED / PENDING 置为 REJECTED）
+        await db.execute(
+            text(
+                """
+                UPDATE purchase_orders po
+                JOIN purchase_order_items poi ON poi.order_id = po.id
+                SET po.status = 'REJECTED'
+                WHERE poi.ingredient_id = :ingredient_id AND po.status IN ('SUSPENDED','PENDING','RUNNING')
+                """
+            ),
+            {"ingredient_id": ingredient_id},
+        )
+        await db.execute(text("DELETE FROM purchase_order_items WHERE ingredient_id = :id"), {"id": ingredient_id})
+        await db.execute(text("DELETE FROM inventory WHERE ingredient_id = :id"), {"id": ingredient_id})
+        await db.execute(text("DELETE FROM suppliers WHERE ingredient_id = :id"), {"id": ingredient_id})
+        await db.execute(text("DELETE FROM ingredients WHERE id = :id"), {"id": ingredient_id})
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete ingredient: {exc}")
+
+    return {"deleted": True, "ingredient_id": ingredient_id, "name": ing["name"]}
+

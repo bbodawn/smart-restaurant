@@ -38,9 +38,11 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     inv_result = await db.execute(
         text(
             """
-            SELECT i.id, i.name, i.unit, i.category, inv.current_stock, inv.safety_stock, inv.daily_sales
+            SELECT i.id, i.name, i.unit, i.category, inv.current_stock, inv.safety_stock, inv.daily_sales,
+                   s.current_price AS price
             FROM ingredients i
             JOIN inventory inv ON inv.ingredient_id = i.id
+            JOIN suppliers s ON s.ingredient_id = i.id
             ORDER BY i.id
             """
         )
@@ -48,7 +50,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
 
     inventory: List[Dict[str, Any]] = []
     for row in inv_result.fetchall():
-        ing_id, name, unit, category, current_stock, safety_stock, daily_sales = row
+        ing_id, name, unit, category, current_stock, safety_stock, daily_sales, price = row
         current_stock = float(current_stock)
         safety_stock = float(safety_stock)
         ratio = (current_stock / safety_stock * 100) if safety_stock > 0 else 0.0
@@ -61,6 +63,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                 "current_stock": current_stock,
                 "safety_stock": safety_stock,
                 "daily_sales": float(daily_sales),
+                "price": float(price) if price is not None else None,
                 "health": _health(ratio),
                 "ratio": round(ratio, 1),
             }

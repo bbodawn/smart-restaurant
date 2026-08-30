@@ -24,7 +24,30 @@
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
-  <!-- 顶部悬浮控制栏 -->
+  <div class="flex min-h-screen">
+    <!-- 侧边栏导航 -->
+    <aside class="w-60 shrink-0 bg-slate-800 text-slate-200 flex flex-col">
+      <div class="px-5 py-4 flex items-center gap-2.5 border-b border-slate-700">
+        <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold shrink-0">智</div>
+        <div class="leading-tight">
+          <div class="font-semibold text-sm text-white">智能餐厅 AI Agent</div>
+          <div class="text-[10px] text-slate-400">LangGraph 履约工作台</div>
+        </div>
+      </div>
+      <nav class="px-3 py-3 space-y-1">
+        <button data-view="dashboard" onclick="showView('dashboard')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition active">
+          <span>📊</span><span>控制台</span>
+        </button>
+        <button data-view="inventory" onclick="showView('inventory')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span>📦</span><span>食材管理</span>
+        </button>
+      </nav>
+      <div class="mt-auto px-5 py-4 text-[10px] text-slate-500 border-t border-slate-700">Smart Restaurant v2</div>
+    </aside>
+    <!-- 右侧内容区 -->
+    <div class="flex-1 min-w-0 flex flex-col">
+  <!-- 顶部悬浮控制栏（控制台视图，由 #view-dashboard 包裹） -->
+  <div id="view-dashboard" class="flex flex-col">
   <header class="sticky top-0 z-20 backdrop-blur bg-white/80 border-b border-slate-200 shadow-sm">
     <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between flex-wrap gap-3">
       <div class="flex items-center gap-3">
@@ -97,6 +120,35 @@
       <div id="order-list" class="space-y-3"></div>
     </section>
   </main>
+  </div><!-- /view-dashboard -->
+
+  <!-- 食材库管理视图 -->
+  <div id="view-inventory" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
+    <div>
+      <h2 class="text-base font-semibold text-slate-800">食材库管理</h2>
+      <p class="text-xs text-slate-400 mt-0.5">对已有食材进行编辑或删除运维</p>
+    </div>
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-slate-50 text-left text-xs text-slate-400 uppercase tracking-wide">
+            <th class="px-4 py-3">食材</th>
+            <th class="px-4 py-3">分类</th>
+            <th class="px-4 py-3">单位</th>
+            <th class="px-4 py-3">当前库存</th>
+            <th class="px-4 py-3">安全线</th>
+            <th class="px-4 py-3">日消耗</th>
+            <th class="px-4 py-3">单价</th>
+            <th class="px-4 py-3 text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody id="ing-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  </div><!-- /content -->
+  </div><!-- /flex -->
 
   <div id="toast" class="toast fixed top-20 left-1/2 -translate-x-1/2 px-5 py-3 rounded-xl bg-slate-800 text-white text-sm shadow-xl opacity-0 pointer-events-none z-50"></div>
 
@@ -426,6 +478,88 @@
     window.hideIngError = hideIngError;
 
     loadDashboard().catch(e=>showToast('加载失败：'+e.message));
+
+    // ================= 侧边栏视图切换与食材管理 =================
+    function showView(name){
+      const dash = document.getElementById('view-dashboard');
+      const inv = document.getElementById('view-inventory');
+      if(name==='inventory'){ dash.classList.add('hidden'); inv.classList.remove('hidden'); inv.classList.add('flex'); renderInventoryTable(); }
+      else { inv.classList.add('hidden'); inv.classList.remove('flex'); dash.classList.remove('hidden'); }
+      document.querySelectorAll('.nav-btn').forEach(b=>{
+        const on = b.dataset.view === name;
+        b.className = 'nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ' + (on ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700/60');
+      });
+    }
+
+    function renderInventoryTable(){
+      const tbody = document.getElementById('ing-table-body');
+      tbody.innerHTML = '';
+      state.inventory.forEach(it=>{
+        const tr = document.createElement('tr');
+        tr.className = 'border-t border-slate-100 hover:bg-slate-50';
+        tr.innerHTML = `
+          <td class="px-4 py-3 font-medium text-slate-800">${it.name}</td>
+          <td class="px-4 py-3 text-slate-500">${it.category||'—'}</td>
+          <td class="px-4 py-3 text-slate-500">${it.unit||'kg'}</td>
+          <td class="px-4 py-3 tabular-nums">${it.current_stock}</td>
+          <td class="px-4 py-3 tabular-nums text-slate-500">${it.safety_stock}</td>
+          <td class="px-4 py-3 tabular-nums text-slate-500">${it.daily_sales}</td>
+          <td class="px-4 py-3 tabular-nums text-slate-600">¥${it.price || ''}</td>
+          <td class="px-4 py-3 text-right space-x-2">
+            <button onclick="openEditIngredient(${it.ingredient_id})" class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs hover:bg-slate-200 transition">编辑</button>
+            <button onclick="deleteIngredient(${it.ingredient_id}, '${it.name.replace(/'/g,"\\'")}')" class="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 text-xs hover:bg-rose-100 transition">删除</button>
+          </td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    let editingIngredient = null;
+    function openEditIngredient(id){
+      const it = state.inventory.find(x=>x.ingredient_id===id);
+      if(!it) return;
+      editingIngredient = it;
+      document.getElementById('edit-name').textContent = '（' + it.name + '）';
+      document.getElementById('e-stock').value = it.current_stock;
+      document.getElementById('e-safety').value = it.safety_stock;
+      document.getElementById('e-daily').value = it.daily_sales;
+      document.getElementById('e-price').value = it.price || '';
+      document.getElementById('edit-error').classList.add('hidden');
+      document.getElementById('edit-modal').classList.remove('hidden');
+      document.getElementById('edit-modal').classList.add('flex');
+    }
+    function closeEditModal(){
+      document.getElementById('edit-modal').classList.add('hidden');
+      document.getElementById('edit-modal').classList.remove('flex');
+    }
+    async function saveEditIngredient(){
+      const body = {
+        current_stock: parseFloat(document.getElementById('e-stock').value),
+        safety_stock: parseFloat(document.getElementById('e-safety').value),
+        daily_consumption: parseFloat(document.getElementById('e-daily').value),
+        unit_price: parseFloat(document.getElementById('e-price').value),
+      };
+      const btn = document.getElementById('btn-save-edit'); const orig = btn.textContent;
+      btn.disabled = true; btn.textContent = '保存中…';
+      try{
+        const r = await fetch(API+'/ingredients/'+editingIngredient.ingredient_id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        const data = await r.json();
+        if(!r.ok) throw new Error(data.detail||r.statusText);
+        showToast('已保存：' + data.name);
+        closeEditModal();
+        await loadDashboard();
+      }catch(e){ const el=document.getElementById('edit-error'); el.textContent=e.message; el.classList.remove('hidden'); }
+      finally { btn.disabled=false; btn.textContent=orig; }
+    }
+    async function deleteIngredient(id, name){
+      if(!confirm('确定要删除该食材「'+name+'」吗？')) return;
+      try{
+        const r = await fetch(API+'/ingredients/'+id, { method:'DELETE' });
+        if(!r.ok){ const j=await r.json(); throw new Error(j.detail||r.statusText); }
+        showToast('已删除食材：' + name);
+        await loadDashboard();
+        renderInventoryTable();
+      }catch(e){ showToast('删除失败：' + e.message); }
+    }
   </script>
 
   <!-- 新增食材 Modal -->
@@ -488,6 +622,42 @@
       <div class="mt-5 flex justify-end gap-2">
         <button id="btn-cancel-ing" onclick="closeAddIngredientModal()" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 text-sm font-medium hover:bg-slate-200 transition">取消</button>
         <button id="btn-submit-ing" onclick="submitAddIngredient(event)" class="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 transition">添加食材</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 编辑食材 Modal -->
+  <div id="edit-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
+    <div class="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onclick="closeEditModal()"></div>
+    <div class="relative bg-white w-full max-w-md mx-4 rounded-2xl shadow-2xl border border-slate-200 p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-semibold text-slate-800">编辑食材 <span id="edit-name" class="text-slate-400 font-normal"></span></h3>
+        <button onclick="closeEditModal()" class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <p id="edit-error" class="text-red-500 text-xs mb-2 hidden"></p>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-slate-500 block mb-1">当前库存</label>
+          <input id="e-stock" type="number" step="0.01" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-500 block mb-1">安全线</label>
+          <input id="e-safety" type="number" step="0.01" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-500 block mb-1">日消耗</label>
+          <input id="e-daily" type="number" step="0.01" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-500 block mb-1">采购单价 (¥/kg)</label>
+          <input id="e-price" type="number" step="0.01" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400" />
+        </div>
+      </div>
+      <div class="mt-5 flex justify-end gap-2">
+        <button onclick="closeEditModal()" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 text-sm font-medium hover:bg-slate-200 transition">取消</button>
+        <button id="btn-save-edit" onclick="saveEditIngredient()" class="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 transition">保存</button>
       </div>
     </div>
   </div>
