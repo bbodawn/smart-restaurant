@@ -176,11 +176,55 @@
 
   <!-- 菜品价格报表视图 -->
   <div id="view-price-reports" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
-    <div>
-      <h2 class="text-base font-semibold text-slate-800">菜品价格报表</h2>
-      <p class="text-xs text-slate-400 mt-0.5">每日食材/菜品价格波动与行情走势</p>
+    <div class="flex items-center justify-between flex-wrap gap-2">
+      <div>
+        <h2 class="text-base font-semibold text-slate-800">菜品价格报表</h2>
+        <p class="text-xs text-slate-400 mt-0.5">以 2026-08-01 为基线 · 对比 2026-09-01 · 31 天每日报价</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="pr-mode-31" onclick="togglePriceMode('31')" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs">近30天(整月)</button>
+        <button id="pr-mode-7" onclick="togglePriceMode('7')" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs">近7天</button>
+      </div>
     </div>
-    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm">价格报表模块 · 待接入数据</div>
+    <!-- 行情 KPI 卡 -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white border border-rose-200 rounded-2xl shadow-sm p-5">
+        <div class="text-xs text-rose-500 mb-2">大宗食材涨幅王</div>
+        <div class="font-semibold text-xl text-rose-600" id="pr-king-rise">—</div>
+      </div>
+      <div class="bg-white border border-emerald-200 rounded-2xl shadow-sm p-5">
+        <div class="text-xs text-emerald-600 mb-2">成本降幅王</div>
+        <div class="font-semibold text-xl text-emerald-700" id="pr-king-fall">—</div>
+      </div>
+      <div class="bg-white border border-amber-200 rounded-2xl shadow-sm p-5">
+        <div class="text-xs text-amber-600 mb-2">价格异常预警数</div>
+        <div class="font-semibold text-xl text-amber-700" id="pr-anomaly">—</div>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+        <div class="text-xs text-slate-400 mb-2">大盘价格指数</div>
+        <div class="font-semibold text-xl text-slate-800" id="pr-index">—</div>
+      </div>
+    </div>
+    <!-- 31 天报价明细表 -->
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div class="px-4 py-3 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">食材每日报价对比</div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm min-w-[800px]" style="table-layout:auto;">
+          <thead>
+            <tr class="bg-slate-50 text-left text-xs text-slate-400 uppercase tracking-wide">
+              <th class="px-4 py-3">食材名称</th>
+              <th class="px-4 py-3">所属分类</th>
+              <th class="px-4 py-3">基线单价 (08-01)</th>
+              <th class="px-4 py-3">今日单价 (09-01)</th>
+              <th class="px-4 py-3">月度累计涨跌幅</th>
+              <th class="px-4 py-3">31天最高 / 最低</th>
+              <th class="px-4 py-3">行情趋势</th>
+            </tr>
+          </thead>
+          <tbody id="pr-table-body"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <!-- 出库记录视图 -->
@@ -578,7 +622,7 @@
         const v = b.dataset.view;
         const el = document.getElementById('view-' + v);
         if(!el) return;
-        if(v === name){ el.classList.remove('hidden'); if(v==='inventory'||v==='daily-sales') el.classList.add('flex'); }
+        if(v === name){ el.classList.remove('hidden'); if(v==='inventory'||v==='daily-sales'||v==='price-reports') el.classList.add('flex'); }
         else { el.classList.add('hidden'); el.classList.remove('flex'); }
         const on = v === name;
         b.className = 'nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ' + (on ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700/60');
@@ -586,6 +630,7 @@
       if(name==='inventory') renderInventoryTable();
       if(name==='daily-sales') renderDailySalesSkeleton();
       if(name==='agents') renderAgents();
+      if(name==='price-reports') renderPriceReport();
     }
 
     function renderInventoryTable(){
@@ -734,6 +779,90 @@
             <button class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-500 text-xs hover:bg-slate-100 transition">查看运行日志</button>
           </div>
         </div>`).join('');
+    }
+
+    // ============= 菜品价格报表：31 天模拟数据表格（无折线图） =============
+    // 每项: 8/1 基线价 → 9/1 目标价；shape 决定中间演变
+    const PRICE_SEEDS = [
+      { name:'非转基因大豆油', cat:'调料',     baseline:12.0, target:15.0, unit:'L',  shape:'linearUp', drift:0.06 },
+      { name:'招牌特调酱油',   cat:'调料',     baseline:7.5,  target:8.5,  unit:'L',  shape:'linearUp', drift:0.04 },
+      { name:'优质猪肉',       cat:'生鲜肉类', baseline:26.0, target:28.0, unit:'kg', shape:'osc',      drift:0.03 },
+      { name:'鲜嫩鸡胸肉',     cat:'生鲜肉类', baseline:18.0, target:18.5, unit:'kg', shape:'normal',   drift:0.05 },
+      { name:'原切雪花牛肉',   cat:'生鲜肉类', baseline:85.0, target:88.0, unit:'kg', shape:'linearUp', drift:0.05 },
+      { name:'冰鲜基围虾',     cat:'水产海鲜', baseline:64.0, target:65.0, unit:'kg', shape:'normal',   drift:0.05 },
+      { name:'东北大米',       cat:'主食',     baseline:5.0,  target:5.0,  unit:'kg', shape:'flat',     drift:0.02 },
+      { name:'面粉',           cat:'主食',     baseline:5.0,  target:5.0,  unit:'kg', shape:'flat',     drift:0.02 },
+      { name:'高山土豆',       cat:'蔬菜时蔬', baseline:3.2,  target:3.0,  unit:'kg', shape:'spike',    drift:0.08 },
+      { name:'有机菜心',       cat:'蔬菜时蔬', baseline:3.2,  target:3.0,  unit:'kg', shape:'spike',    drift:0.08 },
+    ];
+    const PRICE_DAYS = 31; // 08-01 .. 09-01
+    function _seed(i){ const x=Math.sin(i*127.1)*43758.5; return x-Math.floor(x); }
+    function _pdate(idx){ const d=new Date(2026,7,1+idx); return ('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+    function getPriceSeries(seed){
+      const arr=[];
+      for(let i=0;i<PRICE_DAYS;i++){
+        const t=i/(PRICE_DAYS-1);
+        let base=seed.baseline+(seed.target-seed.baseline)*t;
+        let wob=(_seed(seed.name.charCodeAt(0)*7+i)-0.5)*2*seed.drift*seed.baseline;
+        if(seed.shape==='flat'){ base=seed.baseline+((_seed(seed.name.charCodeAt(0)+i)-0.5)*0.2); wob=0; }
+        else if(seed.shape==='spike'){ base+=Math.exp(-Math.pow((t-0.5)/0.22,2))*seed.baseline*0.25; }
+        else if(seed.shape==='osc'){ base+=Math.sin(t*Math.PI*3)*seed.baseline*0.02; }
+        else if(seed.shape==='normal'){ wob*=2; }
+        arr.push({ date:_pdate(i), price:Math.round((base+wob)*100)/100 });
+      }
+      arr[0]={ date:_pdate(0), price:seed.baseline };
+      arr[PRICE_DAYS-1]={ date:_pdate(PRICE_DAYS-1), price:seed.target };
+      return arr;
+    }
+    let PRICE_MODE='31';
+    function togglePriceMode(mode){
+      PRICE_MODE=mode;
+      document.getElementById('pr-mode-31').className = 'px-3 py-1.5 rounded-lg border text-xs ' + (mode==='31'?'bg-slate-800 text-white border-slate-800':'border-slate-200 text-slate-500');
+      document.getElementById('pr-mode-7').className  = 'px-3 py-1.5 rounded-lg border text-xs ' + (mode==='7' ?'bg-slate-800 text-white border-slate-800':'border-slate-200 text-slate-500');
+      renderPriceReport();
+    }
+    function renderPriceReport(){
+      const summary = PRICE_SEEDS.map(s=>{
+        const series = getPriceSeries(s);
+        const days = PRICE_MODE==='31' ? series : series.slice(-7);
+        return { seed:s, all:series, base:series[0].price, cur:series[PRICE_DAYS-1].price, days };
+      });
+      // KPI
+      const byChg = summary.slice().sort((a,b)=>((b.cur-b.base)/b.base)-((a.cur-a.base)/a.base));
+      const rise = byChg[0], fall = byChg[byChg.length-1];
+      const riseChg = ((rise.cur-rise.base)/rise.base)*100, fallChg = ((fall.cur-fall.base)/fall.base)*100;
+      document.getElementById('pr-king-rise').innerHTML = `${rise.seed.name} <span class="text-sm">+${riseChg.toFixed(1)}%</span>`;
+      document.getElementById('pr-king-fall').textContent = `${fall.seed.name} ${fallChg.toFixed(1)}%`;
+      const anomaly = summary.filter(x=>Math.abs((x.cur-x.base)/x.base)>0.20).length;
+      document.getElementById('pr-anomaly').textContent = anomaly;
+      const avg = summary.reduce((a,x)=>a+((x.cur-x.base)/x.base),0)/summary.length;
+      document.getElementById('pr-index').innerHTML = avg>=0 ? `轻微上涨 ↑${Math.abs(avg*100).toFixed(1)}%` : `轻微下跌 ↓${Math.abs(avg*100).toFixed(1)}%`;
+
+      // 表格
+      const tbody = document.getElementById('pr-table-body');
+      tbody.innerHTML = summary.map(x=>{
+        const chg = ((x.cur-x.base)/x.base)*100;
+        const hi = Math.max(...x.days.map(p=>p.price)), lo = Math.min(...x.days.map(p=>p.price));
+        const cls = chg>0?'text-rose-600':(chg<0?'text-emerald-600':'text-slate-400');
+        const chgStr = chg>0?`+${chg.toFixed(1)}%`:chg.toFixed(1)+'%';
+        const trend = chg>0
+          ? '<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-rose-50 text-rose-600 border border-rose-200">上涨 ↑</span>'
+          : chg<0
+            ? '<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-600 border border-emerald-200">下降 ↓</span>'
+            : '<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-500 border border-slate-200">平稳 -</span>';
+        // 近7天模式：基线/今日改为窗口首/末
+        const baseShow = PRICE_MODE==='31' ? x.base : x.days[0].price;
+        const curShow  = PRICE_MODE==='31' ? x.cur  : x.days[x.days.length-1].price;
+        return `<tr class="border-t border-slate-100 hover:bg-slate-50">
+          <td class="px-4 py-3 font-medium text-slate-800">${x.seed.name}</td>
+          <td class="px-4 py-3 text-slate-500">${x.seed.cat}</td>
+          <td class="px-4 py-3 tabular-nums text-slate-500">¥${baseShow.toFixed(2)}/${x.seed.unit}</td>
+          <td class="px-4 py-3 tabular-nums">¥${curShow.toFixed(2)}/${x.seed.unit}</td>
+          <td class="px-4 py-3 tabular-nums font-medium ${cls}">${chgStr}${PRICE_MODE==='7'?' (7天)':''}</td>
+          <td class="px-4 py-3 tabular-nums text-slate-600">¥${hi.toFixed(2)} / ¥${lo.toFixed(2)}</td>
+          <td class="px-4 py-3">${trend}</td>
+        </tr>`;
+      }).join('');
     }
   </script>
 
