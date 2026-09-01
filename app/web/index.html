@@ -21,7 +21,38 @@
     .pulse-rose { animation: pulseRose 1.4s ease-in-out infinite; }
     @keyframes pulseRose { 0%,100%{ box-shadow:0 0 0 0 rgba(244,63,94,.35);} 50%{ box-shadow:0 0 0 6px rgba(244,63,94,0);} }
     .timeline-arrow { color:#CBD5E1; }
-  </style>
+
+    /* ===== 菜品价格报表：硬性容器尺寸约束（根治 Flex 坍塌/重叠） ===== */
+    #view-price-reports {
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box;
+    }
+    .price-chart-card {
+      width: 100% !important;
+      min-width: 0;
+      max-width: 100%;
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .chart-wrapper {
+      position: relative !important;
+      width: 100% !important;
+      height: 380px !important; /* 硬性高度，禁止 0 像素坍塌 */
+      overflow: hidden;
+    }
+    .chart-wrapper svg {
+      position: absolute !important;
+      left: 0 !important;
+      top: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+    }
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
   <div class="flex min-h-screen">
@@ -200,7 +231,7 @@
       </div>
     </div>
     <!-- 走势图 + 筛选 -->
-    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 w-full relative min-h-[400px] box-border">
+    <div class="price-chart-card">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div class="text-sm font-semibold text-slate-800">近 <span id="pr-range-label">30</span> 天价格走势</div>
         <div class="flex items-center gap-2">
@@ -218,7 +249,9 @@
           </select>
         </div>
       </div>
-      <svg id="pr-chart" viewBox="0 0 820 380" preserveAspectRatio="xMidYMid meet" class="w-full block" style="width:100%; height:350px;"></svg>
+      <div class="chart-wrapper">
+        <svg id="pr-chart" viewBox="0 0 820 380" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
     </div>
     <!-- 每日报价明细表 -->
     <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
@@ -645,7 +678,21 @@
       if(name==='inventory') renderInventoryTable();
       if(name==='daily-sales') renderDailySalesSkeleton();
       if(name==='agents') renderAgents();
-      if(name==='price-reports') setTimeout(renderPriceReport, 60); // 先显示 DOM 再重绘，确保拿到 100% 宽度
+      if(name==='price-reports') switchToPriceReportView();
+    }
+    // 菜品价格报表：先显示 DOM 再延迟重绘（严格避免 display:none 时初始化导致尺寸 0 坍塌）
+    function switchToPriceReportView(){
+      const el = document.getElementById('view-price-reports');
+      if(el && el.classList.contains('hidden')) el.classList.remove('hidden');
+      if(el && !el.classList.contains('flex')) el.classList.add('flex');
+      // 先显示 DOM 再延迟全量初始化（KPI + 表格 + 折线），避免尺寸 0 坍塌
+      setTimeout(() => renderPriceReport(), 50);
+    }
+    function initOrResizePriceChart(){
+      // 等价于 Chart.js destroy + 重建：先清空旧 SVG，再按当前 100% 宽度与 380px 高度重绘
+      const svg = document.getElementById('pr-chart');
+      if(svg){ svg.innerHTML=''; }
+      renderPriceChart();
     }
 
     function renderInventoryTable(){
