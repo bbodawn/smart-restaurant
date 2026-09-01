@@ -200,7 +200,7 @@
       </div>
     </div>
     <!-- 走势图 + 筛选 -->
-    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 w-full relative min-h-[380px] box-border">
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 w-full relative min-h-[400px] box-border">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div class="text-sm font-semibold text-slate-800">近 <span id="pr-range-label">30</span> 天价格走势</div>
         <div class="flex items-center gap-2">
@@ -218,7 +218,7 @@
           </select>
         </div>
       </div>
-      <svg id="pr-chart" viewBox="0 0 800 260" preserveAspectRatio="xMidYMid meet" class="w-full" style="width:100%; min-height:320px;"></svg>
+      <svg id="pr-chart" viewBox="0 0 820 380" preserveAspectRatio="xMidYMid meet" class="w-full block" style="width:100%; height:350px;"></svg>
     </div>
     <!-- 每日报价明细表 -->
     <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
@@ -645,7 +645,7 @@
       if(name==='inventory') renderInventoryTable();
       if(name==='daily-sales') renderDailySalesSkeleton();
       if(name==='agents') renderAgents();
-      if(name==='price-reports') renderPriceReport();
+      if(name==='price-reports') setTimeout(renderPriceReport, 60); // 先显示 DOM 再重绘，确保拿到 100% 宽度
     }
 
     function renderInventoryTable(){
@@ -914,7 +914,8 @@
       const cat = document.getElementById('pr-filter').value;
       const days = parseInt(document.getElementById('pr-range').value||'30',10);
       const keys = PRICE_SEEDS.filter(s=>catMatch(cat,s.name)).map(s=>s.name);
-      const W=800, H=260, padL=42, padR=16, padT=16, padB=28;
+      // 视口 820x380，充足内边距给坐标轴留空间（Y 轴含单位、X 轴含日期）
+      const W=820, H=380, padL=64, padR=26, padT=34, padB=54;
       let min=Infinity,max=-Infinity;
       const seriesList = keys.map(k=>{ const s=getSeries(k).slice(-days); return {name:k, pts:s}; });
       seriesList.forEach(s=>s.pts.forEach(p=>{ if(p.price<min)min=p.price; if(p.price>max)max=p.price; }));
@@ -923,20 +924,35 @@
       const x=i=> padL + i*(W-padL-padR)/(seriesList[0].pts.length-1||1);
       const y=v=> H-padB - (v-min)/range*(H-padT-padB);
       const palette=['#f43f5e','#10b981','#f59e0b','#6366f1','#14b8a6','#f97316','#8b5cf6','#0ea5e9'];
-      let svg='<line x1="'+padL+'" y1="'+y(0)+'" x2="'+(W-padR)+'" y2="'+y(0)+'" stroke="#e2e8f0" stroke-width="1"/>';
-      // y gridlines
-      for(let g=0;g<=4;g++){ const vv=min+range*g/4; const yy=y(vv); svg+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="#f1f5f9" stroke-width="1"/><text x="4" y="'+(yy+4)+'" font-size="10" fill="#94a3b8">¥'+vv.toFixed(1)+'</text>'; }
-      // x labels
-      const step=Math.ceil(seriesList[0].pts.length/6);
-      seriesList[0].pts.forEach((p,i)=>{ if(i%step===0) svg+='<text x="'+(x(i))+' " y="'+(H-10)+'" font-size="10" fill="#94a3b8" text-anchor="middle">'+p.date+'</text>'; });
+      let svg='';
+      // 绘制区域背景与边框
+      svg+='<rect x="'+padL+'" y="'+padT+'" width="'+(W-padL-padR)+'" height="'+(H-padT-padB)+'" fill="#fafafa" stroke="#e2e8f0" stroke-width="1"/>';
+      // Y 轴网格线 + 刻度（左对齐在左侧留白区，避免贴边）
+      for(let g=0;g<=4;g++){
+        const vv = min + range*g/4;
+        const yy = y(vv);
+        svg+='<line x1="'+padL+'" y1="'+yy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+yy.toFixed(1)+'" stroke="#eef2f7" stroke-width="1"/>';
+        svg+='<text x="'+(padL-8)+'" y="'+(yy+4)+'" font-size="11" fill="#64748b" text-anchor="end">¥'+vv.toFixed(1)+'</text>';
+      }
+      // X 轴日期标签：按步长抽样，避免 31 天挤在一起（每格最多 6 个刻度）
+      const step = Math.max(1, Math.ceil(seriesList[0].pts.length/6));
+      for(let i=0;i<seriesList[0].pts.length;i+=step){
+        const p = seriesList[0].pts[i];
+        svg+='<line x1="'+x(i).toFixed(1)+'" y1="'+padT+'" x2="'+x(i).toFixed(1)+'" y2="'+(H-padB)+'" stroke="#eef2f7" stroke-width="1"/>';
+        svg+='<text x="'+x(i).toFixed(1)+'" y="'+(H-padB+18)+'" font-size="11" fill="#94a3b8" text-anchor="middle">'+p.date+'</text>';
+      }
+      // 折线
       seriesList.forEach((s,si)=>{
         const pts = s.pts.map((p,i)=> x(i).toFixed(1)+','+y(p.price).toFixed(1)).join(' ');
         svg += '<polyline points="'+pts+'" fill="none" stroke="'+palette[si%palette.length]+'" stroke-width="2"/>';
       });
-      // legend
-      svg += '<g font-size="10" fill="#475569">';
-      seriesList.forEach((s,si)=>{ svg+='<circle cx="'+8+'" cy="'+(6+si*14)+'" r="3" fill="'+palette[si%palette.length]+'"/><text x="16" y="'+(10+si*14)+'">'+s.name+'</text>'; });
-      svg += '</g>';
+      // 图例（右上角，避开 Y 轴）
+      const ly0 = padT+4;
+      seriesList.forEach((s,si)=>{
+        const tx = W - padR - 140;
+        svg+='<circle cx="'+(tx+4)+'" cy="'+(ly0+si*16+6)+'" r="3" fill="'+palette[si%palette.length]+'"/>';
+        svg+='<text x="'+(tx+12)+'" y="'+(ly0+si*16+10)+'" font-size="11" fill="#475569">'+s.name+'</text>';
+      });
       document.getElementById('pr-chart').innerHTML = svg;
     }
   </script>
