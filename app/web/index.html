@@ -56,6 +56,9 @@
         <button data-view="suppliers" onclick="showView('suppliers')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
           <span>🏪</span><span>合作供应商</span>
         </button>
+        <button data-view="agents" onclick="showView('agents')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span>🤖</span><span>AI Agent 中心</span>
+        </button>
       </nav>
       <div class="mt-auto px-5 py-4 text-[10px] text-slate-500 border-t border-slate-700">Smart Restaurant v2</div>
     </aside>
@@ -205,6 +208,35 @@
       <p class="text-xs text-slate-400 mt-0.5">供应商评价与报价信息</p>
     </div>
     <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm">供应商模块 · 待接入数据</div>
+  </div>
+
+  <!-- AI Agent 中心视图 -->
+  <div id="view-agents" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
+    <div>
+      <h2 class="text-base font-semibold text-slate-800">AI Agent 中心</h2>
+      <p class="text-xs text-slate-400 mt-0.5">Agent 状态与配置看板 · LangGraph StateGraph 多 Agent 工作链</p>
+    </div>
+    <!-- 顶部统计概览 -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+        <div class="text-xs text-slate-400 mb-2">Agent 总数</div>
+        <div class="font-semibold text-2xl tabular-nums text-slate-800">6</div>
+      </div>
+      <div class="bg-white border border-emerald-200 rounded-2xl shadow-sm p-5">
+        <div class="text-xs text-emerald-600 mb-2">运行中</div>
+        <div class="font-semibold text-2xl tabular-nums text-emerald-700">5</div>
+      </div>
+      <div class="bg-white border border-amber-200 rounded-2xl shadow-sm p-5">
+        <div class="text-xs text-amber-600 mb-2">待扩展</div>
+        <div class="font-semibold text-2xl tabular-nums text-amber-700">1</div>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+        <div class="text-xs text-slate-400 mb-2">工作流链条</div>
+        <div class="font-semibold text-sm text-slate-800 mt-1">Demand → Stock → Risk → HITL → Inbound</div>
+      </div>
+    </div>
+    <!-- 6 个 Agent 状态网格 -->
+    <div id="agents-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
   </div>
 
   </div><!-- /content -->
@@ -553,6 +585,7 @@
       });
       if(name==='inventory') renderInventoryTable();
       if(name==='daily-sales') renderDailySalesSkeleton();
+      if(name==='agents') renderAgents();
     }
 
     function renderInventoryTable(){
@@ -666,6 +699,41 @@
             <tbody>${aggRows}</tbody>
           </table>
         </div>`;
+    }
+
+    // AI Agent 中心：渲染 6 个 Agent 状态卡片
+    const AGENTS = [
+      { name:'Sales Agent', desc:'销售趋势与需求预测', status:'运行中', tone:'emerald',
+        prompt:'汇总近30天销量，预测未来需求，作为补货量输入。' },
+      { name:'Inventory Agent', desc:'库存风险与新鲜度评估', status:'运行中', tone:'emerald',
+        prompt:'依据当前库存与安全线，判定库存健康度并计算建议补货量。' },
+      { name:'Reputation Agent', desc:'供应商近30天评价分析', status:'运行中', tone:'emerald',
+        prompt:'聚合供应商评价与履约历史，输出信用评级。' },
+      { name:'Supplier Agent', desc:'价格比对与比价引擎', status:'运行中', tone:'emerald',
+        prompt:'对比各供应商报价与历史均价，识别价格偏离风险。' },
+      { name:'Procurement Agent', desc:'综合采购决策生成', status:'运行中', tone:'emerald',
+        prompt:'综合需求/库存/供应商风控，生成并落库采购订单。' },
+      { name:'Extension Agent', desc:'自定义策略（预留）', status:'待扩展', tone:'amber',
+        prompt:'扩展决策接口预留中，等待新功能定义。' },
+    ];
+    function renderAgents(){
+      const grid = document.getElementById('agents-grid');
+      if(!grid) return;
+      grid.innerHTML = AGENTS.map(a=>`
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <div class="font-medium text-slate-800">${a.name}</div>
+            <span class="text-xs px-2 py-0.5 rounded-full border font-medium ${
+              a.tone==='emerald' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+            }">${a.status}</span>
+          </div>
+          <div class="text-xs text-slate-400">${a.desc}</div>
+          <div class="text-xs text-slate-600 leading-relaxed bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">${a.prompt}</div>
+          <div class="mt-auto flex gap-2 pt-1">
+            <button class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 text-xs hover:bg-slate-200 transition">配置参数</button>
+            <button class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-500 text-xs hover:bg-slate-100 transition">查看运行日志</button>
+          </div>
+        </div>`).join('');
     }
   </script>
 
