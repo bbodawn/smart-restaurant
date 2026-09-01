@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 
 from app.api.dashboard import router as dashboard_router
@@ -15,6 +16,7 @@ from app.core.redis import close_redis, ping_redis
 from app.graph.workflow import build_graph
 
 WEB_INDEX = os.path.join(os.path.dirname(__file__), "web", "index.html")
+WEB_STATIC = os.path.join(os.path.dirname(__file__), "web", "static")
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
@@ -42,6 +44,9 @@ app.include_router(intent_router, prefix="/api/v1")
 app.include_router(test_time_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(ingredients_router, prefix="/api/v1")
+
+# 托管本地静态资源（Tailwind 本地化，避免外部 CDN 依赖）
+app.mount("/static", StaticFiles(directory=WEB_STATIC), name="static")
 
 @app.get("/", include_in_schema=False)
 async def dashboard_page():
