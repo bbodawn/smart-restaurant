@@ -26,7 +26,7 @@
 <body class="bg-slate-50 text-slate-800 min-h-screen">
   <div class="flex min-h-screen">
     <!-- 侧边栏导航 -->
-    <aside class="w-60 shrink-0 bg-slate-800 text-slate-200 flex flex-col">
+    <aside class="fixed top-0 left-0 bottom-0 h-screen w-60 shrink-0 z-50 overflow-y-auto bg-slate-800 text-slate-200 flex flex-col">
       <div class="px-5 py-4 flex items-center gap-2.5 border-b border-slate-700">
         <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold shrink-0">智</div>
         <div class="leading-tight">
@@ -63,7 +63,7 @@
       <div class="mt-auto px-5 py-4 text-[10px] text-slate-500 border-t border-slate-700">Smart Restaurant v2</div>
     </aside>
     <!-- 右侧内容区 -->
-    <div class="flex-1 min-w-0 flex flex-col">
+    <div class="ml-60 w-[calc(100%-15rem)] min-w-0 flex flex-col min-h-screen box-border">
   <!-- 顶部悬浮控制栏（控制台视图，由 #view-dashboard 包裹） -->
   <div id="view-dashboard" class="flex flex-col">
   <header class="sticky top-0 z-20 backdrop-blur bg-white/80 border-b border-slate-200 shadow-sm">
@@ -141,7 +141,7 @@
   </div><!-- /view-dashboard -->
 
   <!-- 食材库管理视图 -->
-  <div id="view-inventory" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
+  <div id="view-inventory" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
     <div>
       <h2 class="text-base font-semibold text-slate-800">食材库管理</h2>
       <p class="text-xs text-slate-400 mt-0.5">对已有食材进行编辑或删除运维</p>
@@ -166,7 +166,7 @@
   </div>
 
   <!-- 菜品与日消耗记录视图 -->
-  <div id="view-daily-sales" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
+  <div id="view-daily-sales" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
     <div>
       <h2 class="text-base font-semibold text-slate-800">菜品与日消耗记录</h2>
       <p class="text-xs text-slate-400 mt-0.5">菜品 BOM 配方 · 今日销量 · 当日食材总消耗（Sales Agent 数据源）</p>
@@ -175,7 +175,7 @@
   </div>
 
   <!-- 菜品价格报表视图 -->
-  <div id="view-price-reports" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
+  <div id="view-price-reports" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
     <div>
       <h2 class="text-base font-semibold text-slate-800">菜品价格报表</h2>
       <p class="text-xs text-slate-400 mt-0.5">每日食材/菜品价格波动与行情走势</p>
@@ -184,7 +184,7 @@
   </div>
 
   <!-- 出库记录视图 -->
-  <div id="view-stock-out" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
+  <div id="view-stock-out" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
     <div>
       <h2 class="text-base font-semibold text-slate-800">出库记录</h2>
       <p class="text-xs text-slate-400 mt-0.5">营业消耗流水审计日志</p>
@@ -193,7 +193,7 @@
   </div>
 
   <!-- 入库管理视图 -->
-  <div id="view-inbound" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
+  <div id="view-inbound" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
     <div>
       <h2 class="text-base font-semibold text-slate-800">入库管理</h2>
       <p class="text-xs text-slate-400 mt-0.5">HITL 待办审批与入库履约历史</p>
@@ -202,7 +202,7 @@
   </div>
 
   <!-- 合作供应商视图 -->
-  <div id="view-suppliers" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
+  <div id="view-suppliers" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
     <div>
       <h2 class="text-base font-semibold text-slate-800">合作供应商</h2>
       <p class="text-xs text-slate-400 mt-0.5">供应商评价与报价信息</p>
@@ -211,7 +211,7 @@
   </div>
 
   <!-- AI Agent 中心视图 -->
-  <div id="view-agents" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
+  <div id="view-agents" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
     <div>
       <h2 class="text-base font-semibold text-slate-800">AI Agent 中心</h2>
       <p class="text-xs text-slate-400 mt-0.5">Agent 状态与配置看板 · LangGraph StateGraph 多 Agent 工作链</p>
