@@ -1,13 +1,16 @@
 from typing import Dict, Any, List
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.clock import advance_virtual_days
+from app.core.clock import advance_virtual_days, get_current_date
 from app.services.auto_approval import auto_approve_suspended_orders
 from app.services.auto_procurement import scan_and_trigger_procurement
 
 async def simulate_days_passing(
     db: AsyncSession, days: int = 1, graph: Any = None
 ) -> Dict[str, Any]:
+    # 0. 记录推进前的日期（本次扣减对应的营业日，用于出库日志归属）
+    previous_date = get_current_date()
+
     # 1. 推进虚拟时间
     new_date = advance_virtual_days(days)
 
@@ -69,6 +72,7 @@ async def simulate_days_passing(
 
     return {
         "current_virtual_date": new_date.isoformat(),
+        "previous_virtual_date": previous_date.isoformat(),
         "days_advanced": days,
         "updated_ingredients": updated_items,
         "low_stock_alerts": low_stock_alerts,

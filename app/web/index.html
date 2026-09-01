@@ -559,9 +559,9 @@
       try{
         const r = await api('/test/advance-day', { method:'POST', body: JSON.stringify({ days: parseInt(days) }) });
         showToast('已快进 '+days+' 天');
-        // 根据快进响应把每日消耗写入出库日志
+        // 根据快进响应把每日消耗写入出库日志（归属推进前的营业日）
         const d = (r && r.data) || {};
-        const date = d.current_virtual_date || state.virtual_date || '';
+        const date = d.previous_virtual_date || state.virtual_date || '';
         (d.updated_ingredients || []).forEach(it=>{
           if(it.consumed > 0) appendStockOutLog(date, it.ingredient, it.consumed, it.previous_stock, it.new_stock, '日常营业消耗');
         });
