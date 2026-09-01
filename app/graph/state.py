@@ -25,6 +25,8 @@ class PurchaseState(TypedDict, total=False):
     total_amount: float
     risk_analysis_report: Optional[str]
 
+    extension_agent_analysis: Optional[str]
+
     risk_reason: Optional[str]
     approved: Optional[bool]
 

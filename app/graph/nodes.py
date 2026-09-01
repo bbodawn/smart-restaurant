@@ -179,3 +179,15 @@ async def purchase_agent(state: PurchaseState) -> dict:
     if status == "APPROVED":
         return {"status": "PURCHASE_CREATED"}
     return {"status": status}
+
+
+def extension_agent_node(state: PurchaseState) -> dict:
+    """扩展决策 Agent (ExtensionAgent) 占位节点。
+
+    为后续新增的自定义策略 Agent 预留：
+    - 当前仅写入标记文本，按默认规则放行，不改变任何采购决策。
+    - 该节点未接入主流程（未 add_edge），因此不影响现有 5-Agent 链路。
+    """
+    return {
+        "extension_agent_analysis": "【扩展 Agent】当前策略：按默认规则放行（等待新功能定义）",
+    }
