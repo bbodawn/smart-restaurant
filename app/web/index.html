@@ -41,6 +41,21 @@
         <button data-view="inventory" onclick="showView('inventory')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
           <span>📦</span><span>食材管理</span>
         </button>
+        <button data-view="daily-sales" onclick="showView('daily-sales')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span>🥗</span><span>菜品与日消耗记录</span>
+        </button>
+        <button data-view="price-reports" onclick="showView('price-reports')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span>📈</span><span>菜品价格报表</span>
+        </button>
+        <button data-view="stock-out" onclick="showView('stock-out')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span>📤</span><span>出库记录</span>
+        </button>
+        <button data-view="inbound" onclick="showView('inbound')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span>📥</span><span>入库管理</span>
+        </button>
+        <button data-view="suppliers" onclick="showView('suppliers')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span>🏪</span><span>合作供应商</span>
+        </button>
       </nav>
       <div class="mt-auto px-5 py-4 text-[10px] text-slate-500 border-t border-slate-700">Smart Restaurant v2</div>
     </aside>
@@ -145,6 +160,51 @@
         <tbody id="ing-table-body"></tbody>
       </table>
     </div>
+  </div>
+
+  <!-- 菜品与日消耗记录视图 -->
+  <div id="view-daily-sales" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
+    <div>
+      <h2 class="text-base font-semibold text-slate-800">菜品与日消耗记录</h2>
+      <p class="text-xs text-slate-400 mt-0.5">菜品 BOM 配方 · 今日销量 · 当日食材总消耗（Sales Agent 数据源）</p>
+    </div>
+    <div id="daily-sales-content"></div>
+  </div>
+
+  <!-- 菜品价格报表视图 -->
+  <div id="view-price-reports" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
+    <div>
+      <h2 class="text-base font-semibold text-slate-800">菜品价格报表</h2>
+      <p class="text-xs text-slate-400 mt-0.5">每日食材/菜品价格波动与行情走势</p>
+    </div>
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm">价格报表模块 · 待接入数据</div>
+  </div>
+
+  <!-- 出库记录视图 -->
+  <div id="view-stock-out" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
+    <div>
+      <h2 class="text-base font-semibold text-slate-800">出库记录</h2>
+      <p class="text-xs text-slate-400 mt-0.5">营业消耗流水审计日志</p>
+    </div>
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm">出库流水模块 · 待接入数据</div>
+  </div>
+
+  <!-- 入库管理视图 -->
+  <div id="view-inbound" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
+    <div>
+      <h2 class="text-base font-semibold text-slate-800">入库管理</h2>
+      <p class="text-xs text-slate-400 mt-0.5">HITL 待办审批与入库履约历史</p>
+    </div>
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm">入库管理模块 · 待接入数据</div>
+  </div>
+
+  <!-- 合作供应商视图 -->
+  <div id="view-suppliers" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
+    <div>
+      <h2 class="text-base font-semibold text-slate-800">合作供应商</h2>
+      <p class="text-xs text-slate-400 mt-0.5">供应商评价与报价信息</p>
+    </div>
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm">供应商模块 · 待接入数据</div>
   </div>
 
   </div><!-- /content -->
@@ -481,14 +541,18 @@
 
     // ================= 侧边栏视图切换与食材管理 =================
     function showView(name){
-      const dash = document.getElementById('view-dashboard');
-      const inv = document.getElementById('view-inventory');
-      if(name==='inventory'){ dash.classList.add('hidden'); inv.classList.remove('hidden'); inv.classList.add('flex'); renderInventoryTable(); }
-      else { inv.classList.add('hidden'); inv.classList.remove('flex'); dash.classList.remove('hidden'); }
+      // 通用：遍历所有 nav-btn，切换对应 #view-{name} 容器的显示
       document.querySelectorAll('.nav-btn').forEach(b=>{
-        const on = b.dataset.view === name;
+        const v = b.dataset.view;
+        const el = document.getElementById('view-' + v);
+        if(!el) return;
+        if(v === name){ el.classList.remove('hidden'); if(v==='inventory'||v==='daily-sales') el.classList.add('flex'); }
+        else { el.classList.add('hidden'); el.classList.remove('flex'); }
+        const on = v === name;
         b.className = 'nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ' + (on ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700/60');
       });
+      if(name==='inventory') renderInventoryTable();
+      if(name==='daily-sales') renderDailySalesSkeleton();
     }
 
     function renderInventoryTable(){
@@ -559,6 +623,49 @@
         await loadDashboard();
         renderInventoryTable();
       }catch(e){ showToast('删除失败：' + e.message); }
+    }
+
+    // 菜品与日消耗记录视图骨架
+    const DISH_BOM = [
+      { dish:'西红柿炒鸡蛋', today_sales:50, bom:[{ing:'西红柿',qty:0.3,unit:'kg'},{ing:'鸡蛋',qty:2,unit:'个'}] },
+      { dish:'清炒西兰花',   today_sales:30, bom:[{ing:'西兰花',qty:0.35,unit:'kg'}] },
+      { dish:'土豆炖牛肉',   today_sales:20, bom:[{ing:'高山土豆',qty:0.2,unit:'kg'},{ing:'原切雪花牛肉',qty:0.15,unit:'kg'}] },
+    ];
+    function renderDailySalesSkeleton(){
+      const box = document.getElementById('daily-sales-content');
+      const bomRows = DISH_BOM.map(d=>`
+        <tr class="border-t border-slate-100">
+          <td class="px-4 py-3 font-medium text-slate-800">${d.dish}</td>
+          <td class="px-4 py-3 text-slate-500">${d.bom.map(b=>b.qty+' '+b.unit+' '+b.ing).join(' + ')}</td>
+          <td class="px-4 py-3 tabular-nums">${d.today_sales} 份</td>
+        </tr>`).join('');
+      const agg = {};
+      DISH_BOM.forEach(d=> d.bom.forEach(b=>{ agg[b.ing] = (agg[b.ing]||0) + b.qty * d.today_sales; }));
+      const aggRows = Object.entries(agg).map(([ing, qty])=>
+        `<tr class="border-t border-slate-100"><td class="px-4 py-3 text-slate-800">${ing}</td><td class="px-4 py-3 tabular-nums">${qty.toFixed(1)}</td><td class="px-4 py-3 text-slate-500">kg</td></tr>`
+      ).join('');
+      box.innerHTML = `
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">菜品 BOM 配方映射</div>
+          <table class="w-full text-sm">
+            <thead><tr class="bg-slate-50 text-left text-xs text-slate-400"><th class="px-4 py-2">菜品</th><th class="px-4 py-2">配方（BOM）</th><th class="px-4 py-2">今日销量</th></tr></thead>
+            <tbody>${bomRows}</tbody>
+          </table>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">今日菜品销量</div>
+          <table class="w-full text-sm">
+            <thead><tr class="bg-slate-50 text-left text-xs text-slate-400"><th class="px-4 py-2">菜品</th><th class="px-4 py-2">份数</th></tr></thead>
+            <tbody>${DISH_BOM.map(d=>`<tr class="border-t border-slate-100"><td class="px-4 py-3 text-slate-800">${d.dish}</td><td class="px-4 py-3 tabular-nums">${d.today_sales}</td></tr>`).join('')}</tbody>
+          </table>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">当日食材总消耗汇总（Sales Agent 数据源）</div>
+          <table class="w-full text-sm">
+            <thead><tr class="bg-slate-50 text-left text-xs text-slate-400"><th class="px-4 py-2">食材</th><th class="px-4 py-2">总消耗</th><th class="px-4 py-2">单位</th></tr></thead>
+            <tbody>${aggRows}</tbody>
+          </table>
+        </div>`;
     }
   </script>
 
