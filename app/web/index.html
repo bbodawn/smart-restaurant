@@ -21,43 +21,12 @@
     .pulse-rose { animation: pulseRose 1.4s ease-in-out infinite; }
     @keyframes pulseRose { 0%,100%{ box-shadow:0 0 0 0 rgba(244,63,94,.35);} 50%{ box-shadow:0 0 0 6px rgba(244,63,94,0);} }
     .timeline-arrow { color:#CBD5E1; }
-
-    /* ===== 菜品价格报表：硬性容器尺寸约束（根治 Flex 坍塌/重叠） ===== */
-    #view-price-reports {
-      width: 100% !important;
-      max-width: 100% !important;
-      box-sizing: border-box;
-    }
-    .price-chart-card {
-      width: 100% !important;
-      min-width: 0;
-      max-width: 100%;
-      background: #ffffff;
-      border-radius: 12px;
-      padding: 24px;
-      margin-bottom: 24px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-      box-sizing: border-box;
-      overflow: hidden;
-    }
-    .chart-wrapper {
-      position: relative !important;
-      width: 100% !important;
-      height: 380px !important; /* 硬性高度，禁止 0 像素坍塌 */
-      overflow: hidden;
-    }
-    .chart-wrapper svg {
-      position: absolute !important;
-      left: 0 !important;
-      top: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
-    }
+  </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
   <div class="flex min-h-screen">
     <!-- 侧边栏导航 -->
-    <aside class="fixed top-0 left-0 bottom-0 h-screen w-60 shrink-0 z-50 overflow-y-auto bg-slate-800 text-slate-200 flex flex-col">
+    <aside class="w-60 shrink-0 bg-slate-800 text-slate-200 flex flex-col">
       <div class="px-5 py-4 flex items-center gap-2.5 border-b border-slate-700">
         <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold shrink-0">智</div>
         <div class="leading-tight">
@@ -94,7 +63,7 @@
       <div class="mt-auto px-5 py-4 text-[10px] text-slate-500 border-t border-slate-700">Smart Restaurant v2</div>
     </aside>
     <!-- 右侧内容区 -->
-    <div class="ml-60 w-[calc(100%-15rem)] min-w-0 flex flex-col min-h-screen box-border">
+    <div class="flex-1 min-w-0 flex flex-col">
   <!-- 顶部悬浮控制栏（控制台视图，由 #view-dashboard 包裹） -->
   <div id="view-dashboard" class="flex flex-col">
   <header class="sticky top-0 z-20 backdrop-blur bg-white/80 border-b border-slate-200 shadow-sm">
@@ -172,7 +141,7 @@
   </div><!-- /view-dashboard -->
 
   <!-- 食材库管理视图 -->
-  <div id="view-inventory" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
+  <div id="view-inventory" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
     <div>
       <h2 class="text-base font-semibold text-slate-800">食材库管理</h2>
       <p class="text-xs text-slate-400 mt-0.5">对已有食材进行编辑或删除运维</p>
@@ -197,7 +166,7 @@
   </div>
 
   <!-- 菜品与日消耗记录视图 -->
-  <div id="view-daily-sales" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
+  <div id="view-daily-sales" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
     <div>
       <h2 class="text-base font-semibold text-slate-800">菜品与日消耗记录</h2>
       <p class="text-xs text-slate-400 mt-0.5">菜品 BOM 配方 · 今日销量 · 当日食材总消耗（Sales Agent 数据源）</p>
@@ -206,77 +175,16 @@
   </div>
 
   <!-- 菜品价格报表视图 -->
-  <div id="view-price-reports" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
+  <div id="view-price-reports" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
     <div>
       <h2 class="text-base font-semibold text-slate-800">菜品价格报表</h2>
       <p class="text-xs text-slate-400 mt-0.5">每日食材/菜品价格波动与行情走势</p>
     </div>
-    <!-- 行情统计卡片 -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      <div class="bg-white border border-rose-200 rounded-2xl shadow-sm p-5">
-        <div class="text-xs text-rose-500 mb-2">大宗食材涨幅王</div>
-        <div class="font-semibold text-xl text-rose-600"><span id="pr-king-rise">—</span></div>
-      </div>
-      <div class="bg-white border border-emerald-200 rounded-2xl shadow-sm p-5">
-        <div class="text-xs text-emerald-600 mb-2">成本降幅王</div>
-        <div class="font-semibold text-xl text-emerald-700"><span id="pr-king-fall">—</span></div>
-      </div>
-      <div class="bg-white border border-amber-200 rounded-2xl shadow-sm p-5">
-        <div class="text-xs text-amber-600 mb-2">价格异常预警数</div>
-        <div class="font-semibold text-xl text-amber-700"><span id="pr-anomaly">—</span> 项</div>
-      </div>
-      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
-        <div class="text-xs text-slate-400 mb-2">大盘价格指数</div>
-        <div class="font-semibold text-xl text-slate-800"><span id="pr-index">—</span></div>
-      </div>
-    </div>
-    <!-- 走势图 + 筛选 -->
-    <div class="price-chart-card">
-      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <div class="text-sm font-semibold text-slate-800">近 <span id="pr-range-label">30</span> 天价格走势</div>
-        <div class="flex items-center gap-2">
-          <select id="pr-filter" onchange="renderPriceChart()" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:outline-none">
-            <option value="all">全部分类</option>
-            <option value="主食">主食</option>
-            <option value="生鲜肉类">生鲜肉类</option>
-            <option value="水产海鲜">水产海鲜</option>
-            <option value="蔬菜时蔬">蔬菜时蔬</option>
-            <option value="调料">调料</option>
-          </select>
-          <select id="pr-range" onchange="updatePriceRange()" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:outline-none">
-            <option value="7">7 天</option>
-            <option value="30" selected>30 天</option>
-          </select>
-        </div>
-      </div>
-      <div class="chart-wrapper">
-        <svg id="pr-chart" viewBox="0 0 820 380" preserveAspectRatio="xMidYMid meet"></svg>
-      </div>
-    </div>
-    <!-- 每日报价明细表 -->
-    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-      <div class="px-4 py-3 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">食材每日报价明细</div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm min-w-[900px]">
-          <thead>
-            <tr class="bg-slate-50 text-left text-xs text-slate-400 uppercase tracking-wide">
-              <th class="px-4 py-3">食材名称</th>
-              <th class="px-4 py-3">所属分类</th>
-              <th class="px-4 py-3">基线单价 (08-01)</th>
-              <th class="px-4 py-3">今日单价 (09-01)</th>
-              <th class="px-4 py-3">月度累计涨跌幅</th>
-              <th class="px-4 py-3">31 天最高 / 最低</th>
-              <th class="px-4 py-3">行情趋势</th>
-            </tr>
-          </thead>
-          <tbody id="pr-table-body"></tbody>
-        </table>
-      </div>
-    </div>
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm">价格报表模块 · 待接入数据</div>
   </div>
 
   <!-- 出库记录视图 -->
-  <div id="view-stock-out" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
+  <div id="view-stock-out" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
     <div>
       <h2 class="text-base font-semibold text-slate-800">出库记录</h2>
       <p class="text-xs text-slate-400 mt-0.5">营业消耗流水审计日志</p>
@@ -285,7 +193,7 @@
   </div>
 
   <!-- 入库管理视图 -->
-  <div id="view-inbound" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
+  <div id="view-inbound" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
     <div>
       <h2 class="text-base font-semibold text-slate-800">入库管理</h2>
       <p class="text-xs text-slate-400 mt-0.5">HITL 待办审批与入库履约历史</p>
@@ -294,7 +202,7 @@
   </div>
 
   <!-- 合作供应商视图 -->
-  <div id="view-suppliers" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
+  <div id="view-suppliers" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
     <div>
       <h2 class="text-base font-semibold text-slate-800">合作供应商</h2>
       <p class="text-xs text-slate-400 mt-0.5">供应商评价与报价信息</p>
@@ -303,7 +211,7 @@
   </div>
 
   <!-- AI Agent 中心视图 -->
-  <div id="view-agents" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
+  <div id="view-agents" class="hidden flex-col px-6 py-6 max-w-6xl space-y-5">
     <div>
       <h2 class="text-base font-semibold text-slate-800">AI Agent 中心</h2>
       <p class="text-xs text-slate-400 mt-0.5">Agent 状态与配置看板 · LangGraph StateGraph 多 Agent 工作链</p>
@@ -678,21 +586,6 @@
       if(name==='inventory') renderInventoryTable();
       if(name==='daily-sales') renderDailySalesSkeleton();
       if(name==='agents') renderAgents();
-      if(name==='price-reports') switchToPriceReportView();
-    }
-    // 菜品价格报表：先显示 DOM 再延迟重绘（严格避免 display:none 时初始化导致尺寸 0 坍塌）
-    function switchToPriceReportView(){
-      const el = document.getElementById('view-price-reports');
-      if(el && el.classList.contains('hidden')) el.classList.remove('hidden');
-      if(el && !el.classList.contains('flex')) el.classList.add('flex');
-      // 先显示 DOM 再延迟全量初始化（KPI + 表格 + 折线），避免尺寸 0 坍塌
-      setTimeout(() => renderPriceReport(), 50);
-    }
-    function initOrResizePriceChart(){
-      // 等价于 Chart.js destroy + 重建：先清空旧 SVG，再按当前 100% 宽度与 380px 高度重绘
-      const svg = document.getElementById('pr-chart');
-      if(svg){ svg.innerHTML=''; }
-      renderPriceChart();
     }
 
     function renderInventoryTable(){
@@ -841,166 +734,6 @@
             <button class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-500 text-xs hover:bg-slate-100 transition">查看运行日志</button>
           </div>
         </div>`).join('');
-    }
-
-    // 食材价格模拟：8/1 基线价 → 9/1 目标价（31 天）
-    const PRICE_SEEDS = [
-      { name:'非转基因大豆油', cat:'调料',     baseline:12.0, target:15.0, unit:'L',  shape:'linearUp',   drift:0.06 },
-      { name:'招牌特调酱油',   cat:'调料',     baseline:7.5,  target:8.5,  unit:'L',  shape:'linearUp',   drift:0.04 },
-      { name:'优质猪肉',       cat:'生鲜肉类', baseline:26.0, target:28.0, unit:'kg', shape:'osc',        drift:0.03 },
-      { name:'鲜嫩鸡胸肉',     cat:'生鲜肉类', baseline:18.0, target:18.5, unit:'kg', shape:'normal',     drift:0.05 },
-      { name:'原切雪花牛肉',   cat:'生鲜肉类', baseline:85.0, target:88.0, unit:'kg', shape:'linearUp',   drift:0.05 },
-      { name:'冰鲜基围虾',     cat:'水产海鲜', baseline:64.0, target:65.0, unit:'kg', shape:'normal',     drift:0.05 },
-      { name:'东北大米',       cat:'主食',     baseline:5.0,  target:5.0,  unit:'kg', shape:'flat',       drift:0.02 },
-      { name:'面粉',           cat:'主食',     baseline:5.0,  target:5.0,  unit:'kg', shape:'flat',       drift:0.02 },
-      { name:'高山土豆',       cat:'蔬菜时蔬', baseline:3.2,  target:3.0,  unit:'kg', shape:'spike',      drift:0.08 },
-      { name:'有机菜心',       cat:'蔬菜时蔬', baseline:3.2,  target:3.0,  unit:'kg', shape:'spike',      drift:0.08 },
-    ];
-    const PRICE_HISTORY = {};
-    const START_DATE = new Date(2026, 7, 1); // 2026-08-01
-    const DAYS = 31; // 08-01 ~ 09-01
-
-    function _seeded(i){ const x = Math.sin(i*127.1)*43758.5; return x - Math.floor(x); }
-    function _priceDate(idx){ const d = new Date(START_DATE.getTime() + idx*86400000); return ('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
-
-    function genPriceSeries(seed){
-      // 按 shape 生成 08-01(基线) ~ 09-01(目标) 的 31 天序列
-      const arr = [];
-      for(let i=0;i<DAYS;i++){
-        const t = i/(DAYS-1); // 0..1
-        let base = seed.baseline + (seed.target - seed.baseline) * t; // 线性插值基准线
-        let wob = (_seeded(seed.name.charCodeAt(0)*7 + i) - 0.5) * 2 * seed.drift * seed.baseline; // ±drift 波动
-        if(seed.shape==='flat'){
-          base = seed.baseline + ((_seeded(seed.name.charCodeAt(0)+i)-0.5)*0.2); // ±0.1
-          wob = 0;
-        } else if(seed.shape==='spike'){
-          // 8月中旬波峰，月末回落
-          const peak = Math.exp(-Math.pow((t-0.5)/0.22,2)) * seed.baseline * 0.25;
-          base += peak;
-        } else if(seed.shape==='osc'){
-          // 中旬小幅震荡
-          base += Math.sin(t*Math.PI*3) * seed.baseline * 0.02;
-        } else if(seed.shape==='normal'){
-          wob *= 2; // 常规 ±5% 波动
-        }
-        arr.push({ date:_priceDate(i), price:Math.round((base+wob)*100)/100 });
-      }
-      // 强制首尾精确等于基线/目标价
-      arr[0]  = { date:_priceDate(0),  price: seed.baseline };
-      arr[DAYS-1] = { date:_priceDate(DAYS-1), price: seed.target };
-      return arr;
-    }
-
-    function getSeries(forName){
-      if(!PRICE_HISTORY[forName]){
-        const seed = PRICE_SEEDS.find(s=>s.name===forName);
-        PRICE_HISTORY[forName] = genPriceSeries(seed);
-      }
-      return PRICE_HISTORY[forName];
-    }
-
-    function pct(a,b){ return ((a-b)/b)*100; }
-
-    function renderPriceReport(){
-      const summary = {};
-      PRICE_SEEDS.forEach(s=>{
-        const series = getSeries(s.name);
-        const cur = series[series.length-1].price;
-        const first = series[0].price;
-        summary[s.name] = { cat:s.cat, unit:s.unit, cur, first, series,
-          chgAll: pct(cur, first),
-          hi: Math.max(...series.map(x=>x.price)),
-          lo: Math.min(...series.map(x=>x.price)),
-        };
-      });
-
-      // KPI
-      const byChg = Object.values(summary).sort((a,b)=>b.chgAll-a.chgAll);
-      const kingRise = byChg[0], kingFall = byChg[byChg.length-1];
-      document.getElementById('pr-king-rise').innerHTML = `${kingRise? kingRiseName(summary, kingRise):'—'} <span class="text-sm">↑</span>`;
-      document.getElementById('pr-king-fall').textContent = `${kingFall? kingFallName(summary, kingFall):'—'}`;
-      function kingRiseName(m,k){ const n=Object.keys(m).find(x=>m[x]===k); return `${n} +${k.chgAll.toFixed(1)}%`; }
-      function kingFallName(m,k){ const n=Object.keys(m).find(x=>m[x]===k); return `${n} ${k.chgAll.toFixed(1)}%`; }
-      const anomaly = Object.values(summary).filter(s=>Math.abs(s.chgAll)>20).length;
-      document.getElementById('pr-anomaly').textContent = anomaly;
-      const avgChg = Object.values(summary).reduce((a,s)=>a+s.chgAll,0)/Object.values(summary).length;
-      document.getElementById('pr-index').innerHTML = avgChg>=0 ? `轻微上涨 ↑${Math.abs(avgChg).toFixed(1)}%` : `轻微下跌 ↓${Math.abs(avgChg).toFixed(1)}%`;
-
-      // 表格
-      const tbody = document.getElementById('pr-table-body');
-      tbody.innerHTML = Object.entries(summary).map(([name,s])=>{
-        const chg = s.chgAll;
-        const chgStr = chg>0 ? `+${chg.toFixed(1)}%` : `${chg.toFixed(1)}%`;
-        const chgCellCls = chg>0 ? 'text-rose-600' : (chg<0 ? 'text-emerald-600' : 'text-slate-400');
-        const trend = chg>0
-          ? `<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-rose-50 text-rose-600 border border-rose-200">上涨 ↑ +${chg.toFixed(1)}%</span>`
-          : chg<0
-            ? `<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-600 border border-emerald-200">下降 ↓ ${chg.toFixed(1)}%</span>`
-            : `<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-500 border border-slate-200">平稳 -</span>`;
-        return `<tr class="border-t border-slate-100 hover:bg-slate-50">
-          <td class="px-4 py-3 font-medium text-slate-800">${name}</td>
-          <td class="px-4 py-3 text-slate-500">${s.cat}</td>
-          <td class="px-4 py-3 tabular-nums text-slate-500">¥${s.first.toFixed(2)}/${s.unit}</td>
-          <td class="px-4 py-3 tabular-nums">¥${s.cur.toFixed(2)}/${s.unit}</td>
-          <td class="px-4 py-3 tabular-nums font-medium ${chgCellCls}">${chgStr}</td>
-          <td class="px-4 py-3 tabular-nums text-slate-600">¥${s.hi.toFixed(2)} / ¥${s.lo.toFixed(2)}${s.unit?' /'+s.unit:''}</td>
-          <td class="px-4 py-3">${trend}</td>
-        </tr>`;
-      }).join('');
-
-      renderPriceChart();
-    }
-
-    function catMatch(cat, ingName){
-      const ing = PRICE_SEEDS.find(s=>s.name===ingName);
-      return cat==='all' || (ing && ing.cat===cat);
-    }
-    function updatePriceRange(){ document.getElementById('pr-range-label').textContent = document.getElementById('pr-range').value; renderPriceChart(); }
-
-    function renderPriceChart(){
-      const cat = document.getElementById('pr-filter').value;
-      const days = parseInt(document.getElementById('pr-range').value||'30',10);
-      const keys = PRICE_SEEDS.filter(s=>catMatch(cat,s.name)).map(s=>s.name);
-      // 视口 820x380，充足内边距给坐标轴留空间（Y 轴含单位、X 轴含日期）
-      const W=820, H=380, padL=64, padR=26, padT=34, padB=54;
-      let min=Infinity,max=-Infinity;
-      const seriesList = keys.map(k=>{ const s=getSeries(k).slice(-days); return {name:k, pts:s}; });
-      seriesList.forEach(s=>s.pts.forEach(p=>{ if(p.price<min)min=p.price; if(p.price>max)max=p.price; }));
-      if(!seriesList.length || min===Infinity){ document.getElementById('pr-chart').innerHTML=''; return; }
-      const range=max-min||1;
-      const x=i=> padL + i*(W-padL-padR)/(seriesList[0].pts.length-1||1);
-      const y=v=> H-padB - (v-min)/range*(H-padT-padB);
-      const palette=['#f43f5e','#10b981','#f59e0b','#6366f1','#14b8a6','#f97316','#8b5cf6','#0ea5e9'];
-      let svg='';
-      // 绘制区域背景与边框
-      svg+='<rect x="'+padL+'" y="'+padT+'" width="'+(W-padL-padR)+'" height="'+(H-padT-padB)+'" fill="#fafafa" stroke="#e2e8f0" stroke-width="1"/>';
-      // Y 轴网格线 + 刻度（左对齐在左侧留白区，避免贴边）
-      for(let g=0;g<=4;g++){
-        const vv = min + range*g/4;
-        const yy = y(vv);
-        svg+='<line x1="'+padL+'" y1="'+yy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+yy.toFixed(1)+'" stroke="#eef2f7" stroke-width="1"/>';
-        svg+='<text x="'+(padL-8)+'" y="'+(yy+4)+'" font-size="11" fill="#64748b" text-anchor="end">¥'+vv.toFixed(1)+'</text>';
-      }
-      // X 轴日期标签：按步长抽样，避免 31 天挤在一起（每格最多 6 个刻度）
-      const step = Math.max(1, Math.ceil(seriesList[0].pts.length/6));
-      for(let i=0;i<seriesList[0].pts.length;i+=step){
-        const p = seriesList[0].pts[i];
-        svg+='<line x1="'+x(i).toFixed(1)+'" y1="'+padT+'" x2="'+x(i).toFixed(1)+'" y2="'+(H-padB)+'" stroke="#eef2f7" stroke-width="1"/>';
-        svg+='<text x="'+x(i).toFixed(1)+'" y="'+(H-padB+18)+'" font-size="11" fill="#94a3b8" text-anchor="middle">'+p.date+'</text>';
-      }
-      // 折线
-      seriesList.forEach((s,si)=>{
-        const pts = s.pts.map((p,i)=> x(i).toFixed(1)+','+y(p.price).toFixed(1)).join(' ');
-        svg += '<polyline points="'+pts+'" fill="none" stroke="'+palette[si%palette.length]+'" stroke-width="2"/>';
-      });
-      // 图例（右上角，避开 Y 轴）
-      const ly0 = padT+4;
-      seriesList.forEach((s,si)=>{
-        const tx = W - padR - 140;
-        svg+='<circle cx="'+(tx+4)+'" cy="'+(ly0+si*16+6)+'" r="3" fill="'+palette[si%palette.length]+'"/>';
-        svg+='<text x="'+(tx+12)+'" y="'+(ly0+si*16+10)+'" font-size="11" fill="#475569">'+s.name+'</text>';
-      });
-      document.getElementById('pr-chart').innerHTML = svg;
     }
   </script>
 
