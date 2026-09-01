@@ -229,10 +229,10 @@
             <tr class="bg-slate-50 text-left text-xs text-slate-400 uppercase tracking-wide">
               <th class="px-4 py-3">食材名称</th>
               <th class="px-4 py-3">所属分类</th>
-              <th class="px-4 py-3">当前单价</th>
-              <th class="px-4 py-3">较昨日变动</th>
-              <th class="px-4 py-3">近7天最高/最低</th>
-              <th class="px-4 py-3">7天涨跌幅</th>
+              <th class="px-4 py-3">基线单价 (08-01)</th>
+              <th class="px-4 py-3">今日单价 (09-01)</th>
+              <th class="px-4 py-3">月度累计涨跌幅</th>
+              <th class="px-4 py-3">31 天最高 / 最低</th>
               <th class="px-4 py-3">行情趋势</th>
             </tr>
           </thead>
@@ -796,45 +796,58 @@
         </div>`).join('');
     }
 
-    // ================= 菜品价格报表（模拟数据） =================
-    // 食材基准价（元）: 名称, 分类, 基准现价, 单位
+    // 食材价格模拟：8/1 基线价 → 9/1 目标价（31 天）
     const PRICE_SEEDS = [
-      { name:'东北大米',       cat:'主食',       base:5.0,  unit:'kg' },
-      { name:'面粉',           cat:'主食',       base:4.5,  unit:'kg' },
-      { name:'非转基因大豆油', cat:'调料',       base:15.0, unit:'L'  },
-      { name:'招牌特调酱油',   cat:'调料',       base:12.0, unit:'L'  },
-      { name:'优质猪肉',       cat:'生鲜肉类',   base:28.0, unit:'kg' },
-      { name:'鲜嫩鸡胸肉',     cat:'生鲜肉类',   base:18.0, unit:'kg' },
-      { name:'原切雪花牛肉',   cat:'生鲜肉类',   base:88.0, unit:'kg' },
-      { name:'冰鲜基围虾',     cat:'水产海鲜',   base:65.0, unit:'kg' },
-      { name:'有机菜心',       cat:'蔬菜时蔬',   base:8.0,  unit:'kg' },
-      { name:'高山土豆',       cat:'蔬菜时蔬',   base:4.0,  unit:'kg' },
+      { name:'非转基因大豆油', cat:'调料',     baseline:12.0, target:15.0, unit:'L',  shape:'linearUp',   drift:0.06 },
+      { name:'招牌特调酱油',   cat:'调料',     baseline:7.5,  target:8.5,  unit:'L',  shape:'linearUp',   drift:0.04 },
+      { name:'优质猪肉',       cat:'生鲜肉类', baseline:26.0, target:28.0, unit:'kg', shape:'osc',        drift:0.03 },
+      { name:'鲜嫩鸡胸肉',     cat:'生鲜肉类', baseline:18.0, target:18.5, unit:'kg', shape:'normal',     drift:0.05 },
+      { name:'原切雪花牛肉',   cat:'生鲜肉类', baseline:85.0, target:88.0, unit:'kg', shape:'linearUp',   drift:0.05 },
+      { name:'冰鲜基围虾',     cat:'水产海鲜', baseline:64.0, target:65.0, unit:'kg', shape:'normal',     drift:0.05 },
+      { name:'东北大米',       cat:'主食',     baseline:5.0,  target:5.0,  unit:'kg', shape:'flat',       drift:0.02 },
+      { name:'面粉',           cat:'主食',     baseline:5.0,  target:5.0,  unit:'kg', shape:'flat',       drift:0.02 },
+      { name:'高山土豆',       cat:'蔬菜时蔬', baseline:3.2,  target:3.0,  unit:'kg', shape:'spike',      drift:0.08 },
+      { name:'有机菜心',       cat:'蔬菜时蔬', baseline:3.2,  target:3.0,  unit:'kg', shape:'spike',      drift:0.08 },
     ];
-    const PRICE_HISTORY = {}; // name -> [ {date, price} ]
+    const PRICE_HISTORY = {};
+    const START_DATE = new Date(2026, 7, 1); // 2026-08-01
+    const DAYS = 31; // 08-01 ~ 09-01
 
     function _seeded(i){ const x = Math.sin(i*127.1)*43758.5; return x - Math.floor(x); }
-    function _priceDate(i){ const d = new Date(2026, 5, 1 - i); return (d.getMonth()+1)+'/'+d.getDate(); }
+    function _priceDate(idx){ const d = new Date(START_DATE.getTime() + idx*86400000); return ('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 
-    function genPriceSeries(seed, days, drift){
+    function genPriceSeries(seed){
+      // 按 shape 生成 08-01(基线) ~ 09-01(目标) 的 31 天序列
       const arr = [];
-      let p = seed.base * (1 - drift[0]);
-      for(let i=days-1;i>=0;i--){
-        // 稳定伪随机小幅波动 ±2%
-        p = p * (1 + (_seeded(seed.name.charCodeAt(0)+i)-0.5)*0.04);
-        arr.push({ date:_priceDate(i), price:Math.round(p*100)/100 });
+      for(let i=0;i<DAYS;i++){
+        const t = i/(DAYS-1); // 0..1
+        let base = seed.baseline + (seed.target - seed.baseline) * t; // 线性插值基准线
+        let wob = (_seeded(seed.name.charCodeAt(0)*7 + i) - 0.5) * 2 * seed.drift * seed.baseline; // ±drift 波动
+        if(seed.shape==='flat'){
+          base = seed.baseline + ((_seeded(seed.name.charCodeAt(0)+i)-0.5)*0.2); // ±0.1
+          wob = 0;
+        } else if(seed.shape==='spike'){
+          // 8月中旬波峰，月末回落
+          const peak = Math.exp(-Math.pow((t-0.5)/0.22,2)) * seed.baseline * 0.25;
+          base += peak;
+        } else if(seed.shape==='osc'){
+          // 中旬小幅震荡
+          base += Math.sin(t*Math.PI*3) * seed.baseline * 0.02;
+        } else if(seed.shape==='normal'){
+          wob *= 2; // 常规 ±5% 波动
+        }
+        arr.push({ date:_priceDate(i), price:Math.round((base+wob)*100)/100 });
       }
-      // 强制首尾漂移：让终点相对基准呈现 drift
-      arr[arr.length-1] = { date:arr[arr.length-1].date, price: Math.round(seed.base*(1+drift[1])*100)/100 };
+      // 强制首尾精确等于基线/目标价
+      arr[0]  = { date:_priceDate(0),  price: seed.baseline };
+      arr[DAYS-1] = { date:_priceDate(DAYS-1), price: seed.target };
       return arr;
     }
 
     function getSeries(forName){
       if(!PRICE_HISTORY[forName]){
         const seed = PRICE_SEEDS.find(s=>s.name===forName);
-        // drift[0]=基准前价系数, drift[1]=当前价相对基准变化（正涨负跌）
-        const driftMap = { '非转基因大豆油':[0.9,0.125], '优质猪肉':[1.06,-0.052], '原切雪花牛肉':[0.95,0.03] };
-        const drift = driftMap[forName] || [0.98, 0.01];
-        PRICE_HISTORY[forName] = genPriceSeries(seed, 30, drift);
+        PRICE_HISTORY[forName] = genPriceSeries(seed);
       }
       return PRICE_HISTORY[forName];
     }
@@ -847,12 +860,10 @@
         const series = getSeries(s.name);
         const cur = series[series.length-1].price;
         const first = series[0].price;
-        summary[s.name] = { cat:s.unit? s.cat: s.cat, unit:s.unit, cur, first, series,
-          chg7: pct(cur, series[Math.max(0,series.length-8)].price),
+        summary[s.name] = { cat:s.cat, unit:s.unit, cur, first, series,
           chgAll: pct(cur, first),
-          hi7: Math.max(...series.slice(-8).map(x=>x.price)),
-          lo7: Math.min(...series.slice(-8).map(x=>x.price)),
-          delta1d: series[series.length-1].price - series[series.length-2].price,
+          hi: Math.max(...series.map(x=>x.price)),
+          lo: Math.min(...series.map(x=>x.price)),
         };
       });
 
@@ -871,25 +882,21 @@
       // 表格
       const tbody = document.getElementById('pr-table-body');
       tbody.innerHTML = Object.entries(summary).map(([name,s])=>{
-        const d1 = s.delta1d; const d1pct = pct(s.cur, s.series[s.series.length-2].price);
-        const cell = d1>0
-          ? `<span class="text-rose-600 font-medium">+¥${d1.toFixed(2)}/${s.unit} (+${d1pct.toFixed(1)}%) ↑</span>`
-          : d1<0
-            ? `<span class="text-emerald-600 font-medium">-¥${Math.abs(d1).toFixed(2)}/${s.unit} (${d1pct.toFixed(1)}%) ↓</span>`
-            : `<span class="text-slate-400">0.0% -</span>`;
-        const chg = s.chg7;
+        const chg = s.chgAll;
+        const chgStr = chg>0 ? `+${chg.toFixed(1)}%` : `${chg.toFixed(1)}%`;
+        const chgCellCls = chg>0 ? 'text-rose-600' : (chg<0 ? 'text-emerald-600' : 'text-slate-400');
         const trend = chg>0
-          ? `<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-rose-50 text-rose-600 border border-rose-200">上涨 +${chg.toFixed(1)}%</span>`
+          ? `<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-rose-50 text-rose-600 border border-rose-200">上涨 ↑ +${chg.toFixed(1)}%</span>`
           : chg<0
-            ? `<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-600 border border-emerald-200">下降 ${chg.toFixed(1)}%</span>`
-            : `<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-500 border border-slate-200">平稳 0.0%</span>`;
+            ? `<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-600 border border-emerald-200">下降 ↓ ${chg.toFixed(1)}%</span>`
+            : `<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-500 border border-slate-200">平稳 -</span>`;
         return `<tr class="border-t border-slate-100 hover:bg-slate-50">
           <td class="px-4 py-3 font-medium text-slate-800">${name}</td>
           <td class="px-4 py-3 text-slate-500">${s.cat}</td>
+          <td class="px-4 py-3 tabular-nums text-slate-500">¥${s.first.toFixed(2)}/${s.unit}</td>
           <td class="px-4 py-3 tabular-nums">¥${s.cur.toFixed(2)}/${s.unit}</td>
-          <td class="px-4 py-3">${cell}</td>
-          <td class="px-4 py-3 tabular-nums text-slate-600">¥${s.hi7.toFixed(2)} / ¥${s.lo7.toFixed(2)}/${s.unit}</td>
-          <td class="px-4 py-3 tabular-nums ${chg>0?'text-rose-600':(chg<0?'text-emerald-600':'text-slate-400')}">${chg>0?'+':''}${chg.toFixed(1)}%</td>
+          <td class="px-4 py-3 tabular-nums font-medium ${chgCellCls}">${chgStr}</td>
+          <td class="px-4 py-3 tabular-nums text-slate-600">¥${s.hi.toFixed(2)} / ¥${s.lo.toFixed(2)}${s.unit?' /'+s.unit:''}</td>
           <td class="px-4 py-3">${trend}</td>
         </tr>`;
       }).join('');
