@@ -231,9 +231,49 @@
   <div id="view-stock-out" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
     <div>
       <h2 class="text-base font-semibold text-slate-800">出库记录</h2>
-      <p class="text-xs text-slate-400 mt-0.5">营业消耗流水审计日志</p>
+      <p class="text-xs text-slate-400 mt-0.5">营业消耗流水审计日志 · 随时间加速自动记录</p>
     </div>
-    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm">出库流水模块 · 待接入数据</div>
+    <!-- 顶部统计卡片 -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+        <div class="text-xs text-slate-400 mb-2">今日出库次数</div>
+        <div class="font-semibold text-2xl tabular-nums text-slate-800" id="so-today-count">0</div>
+      </div>
+      <div class="bg-white border border-amber-200 rounded-2xl shadow-sm p-5">
+        <div class="text-xs text-amber-600 mb-2">今日消耗冠军</div>
+        <div class="font-semibold text-lg text-amber-700" id="so-today-top">—</div>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+        <div class="text-xs text-slate-400 mb-2">累计出库流水</div>
+        <div class="font-semibold text-2xl tabular-nums text-slate-800" id="so-total">0</div>
+      </div>
+    </div>
+    <!-- 筛选与搜索 -->
+    <div class="flex flex-wrap items-center gap-2">
+      <input id="so-filter-date" type="date" onchange="renderStockOutLogs()" class="px-3 py-2 rounded-lg border border-slate-200 text-xs" />
+      <input id="so-filter-name" oninput="renderStockOutLogs()" class="px-3 py-2 rounded-lg border border-slate-200 text-xs" placeholder="按食材名搜索..." />
+      <button onclick="document.getElementById('so-filter-date').value='';document.getElementById('so-filter-name').value='';renderStockOutLogs();" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-600 text-xs hover:bg-slate-200 transition">清除筛选</button>
+    </div>
+    <!-- 出库明细表 -->
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div class="px-4 py-3 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">出库日志明细</div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm min-w-[860px]" style="table-layout:auto;">
+          <thead>
+            <tr class="bg-slate-50 text-left text-xs text-slate-400 uppercase tracking-wide">
+              <th class="px-4 py-3">出库单号</th>
+              <th class="px-4 py-3">出库日期</th>
+              <th class="px-4 py-3">食材名称</th>
+              <th class="px-4 py-3">消耗数量</th>
+              <th class="px-4 py-3">变更前库存</th>
+              <th class="px-4 py-3">变更后库存</th>
+              <th class="px-4 py-3">出库类型/备注</th>
+            </tr>
+          </thead>
+          <tbody id="so-tbody"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <!-- 入库管理视图 -->
@@ -291,6 +331,18 @@
   <script>
     const API = '/api/v1';
     let state = { inventory: [], orders: [], virtual_date: '', kpi: {} };
+    // 出库日志（持久化到 localStorage）
+    let stockOutLogs = [];
+    let stockOutSeq = {}; // 每天序号 OUT-YYYYMMDD-xxx
+    try { stockOutLogs = JSON.parse(localStorage.getItem('stock_out_logs')||'[]'); } catch(e){ stockOutLogs=[]; }
+    function saveStockOutLogs(){ try{ localStorage.setItem('stock_out_logs', JSON.stringify(stockOutLogs)); }catch(e){} }
+    function appendStockOutLog(date, ingredient, qty, prev, cur, note){
+      const key = date.replace(/-/g,'');
+      stockOutSeq[key] = (stockOutSeq[key]||1);
+      const no = 'OUT-'+key+'-'+String(stockOutSeq[key]).padStart(3,'0');
+      stockOutSeq[key]++;
+      stockOutLogs.push({ no, date, ingredient, qty, prev, cur, note });
+    }
     let activeTab = 'pending';
 
     const healthUI = {
@@ -507,6 +559,13 @@
       try{
         const r = await api('/test/advance-day', { method:'POST', body: JSON.stringify({ days: parseInt(days) }) });
         showToast('已快进 '+days+' 天');
+        // 根据快进响应把每日消耗写入出库日志
+        const d = (r && r.data) || {};
+        const date = d.current_virtual_date || state.virtual_date || '';
+        (d.updated_ingredients || []).forEach(it=>{
+          if(it.consumed > 0) appendStockOutLog(date, it.ingredient, it.consumed, it.previous_stock, it.new_stock, '日常营业消耗');
+        });
+        saveStockOutLogs();
         await loadDashboard();
       }catch(e){ showToast('快进失败：'+e.message); }
       finally { setAdvancing(false); }
@@ -631,6 +690,7 @@
       if(name==='daily-sales') renderDailySalesSkeleton();
       if(name==='agents') renderAgents();
       if(name==='price-reports') renderPriceReport();
+      if(name==='stock-out') renderStockOutLogs();
     }
 
     function renderInventoryTable(){
@@ -863,6 +923,40 @@
           <td class="px-4 py-3">${trend}</td>
         </tr>`;
       }).join('');
+    }
+
+    // ============= 出库记录：渲染 KPI + 筛选 + 明细表 =============
+    function renderStockOutLogs(){
+      const logs = stockOutLogs.slice().sort((a,b)=> b.date.localeCompare(a.date) || a.no.localeCompare(b.no));
+      const fdate = (document.getElementById('so-filter-date')||{}).value || '';
+      const fname = (((document.getElementById('so-filter-name')||{}).value)||'').trim();
+      const shown = logs.filter(l => (!fdate || l.date===fdate) && (!fname || l.ingredient.includes(fname)));
+
+      // KPI（今日 = 虚拟日期，即最后一条的日期；用最新日期作为"今日"）
+      const today = logs.length ? logs[0].date : (state.virtual_date||'');
+      const todayLogs = logs.filter(l=>l.date===today);
+      document.getElementById('so-today-count').textContent = todayLogs.length;
+      // 今日消耗冠军（按消耗量累计取最大）
+      const agg = {};
+      todayLogs.forEach(l=>{ agg[l.ingredient]=(agg[l.ingredient]||0)+l.qty; });
+      const topName = Object.keys(agg).sort((a,b)=>agg[b]-agg[a])[0];
+      document.getElementById('so-today-top').innerHTML = topName
+        ? `${topName} <span class="text-sm">${(-agg[topName]).toFixed(1)}</span>`
+        : '—';
+      document.getElementById('so-total').textContent = logs.length;
+
+      const tbody = document.getElementById('so-tbody');
+      tbody.innerHTML = shown.length ? shown.map(l=>`
+        <tr class="border-t border-slate-100 hover:bg-slate-50">
+          <td class="px-4 py-3 font-mono text-xs text-slate-600">${l.no}</td>
+          <td class="px-4 py-3 tabular-nums">${l.date}</td>
+          <td class="px-4 py-3 font-medium text-slate-800">${l.ingredient}</td>
+          <td class="px-4 py-3 tabular-nums text-amber-600 font-medium">-${l.qty} ${''}</td>
+          <td class="px-4 py-3 tabular-nums text-slate-500">${l.prev}</td>
+          <td class="px-4 py-3 tabular-nums">${l.cur}</td>
+          <td class="px-4 py-3 text-slate-500">${l.note||'日常营业消耗'}</td>
+        </tr>`).join('')
+        : '<tr class="border-t border-slate-100"><td colspan="7" class="px-4 py-10 text-center text-slate-400 text-sm">暂无出库记录，请在控制台快进天数生成</td></tr>';
     }
   </script>
 
