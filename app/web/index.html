@@ -253,6 +253,7 @@
       <input id="so-filter-date" type="date" onchange="renderStockOutLogs()" class="px-3 py-2 rounded-lg border border-slate-200 text-xs" />
       <input id="so-filter-name" oninput="renderStockOutLogs()" class="px-3 py-2 rounded-lg border border-slate-200 text-xs" placeholder="按食材名搜索..." />
       <button onclick="document.getElementById('so-filter-date').value='';document.getElementById('so-filter-name').value='';renderStockOutLogs();" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-600 text-xs hover:bg-slate-200 transition">清除筛选</button>
+      <button onclick="clearStockOutLogs()" class="px-3 py-2 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 text-xs hover:bg-rose-100 transition">清空出库记录</button>
     </div>
     <!-- 出库明细表 -->
     <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
@@ -957,6 +958,15 @@
           <td class="px-4 py-3 text-slate-500">${l.note||'日常营业消耗'}</td>
         </tr>`).join('')
         : '<tr class="border-t border-slate-100"><td colspan="7" class="px-4 py-10 text-center text-slate-400 text-sm">暂无出库记录，请在控制台快进天数生成</td></tr>';
+    }
+
+    // 清空出库日志（清除历史/旧的错误日期残留）
+    function clearStockOutLogs(){
+      if(!confirm('确定要清空所有出库记录吗？')) return;
+      stockOutLogs = [];
+      stockOutSeq = {};
+      saveStockOutLogs();
+      renderStockOutLogs();
     }
   </script>
 
