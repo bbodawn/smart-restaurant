@@ -180,7 +180,66 @@
       <h2 class="text-base font-semibold text-slate-800">菜品价格报表</h2>
       <p class="text-xs text-slate-400 mt-0.5">每日食材/菜品价格波动与行情走势</p>
     </div>
-    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm">价格报表模块 · 待接入数据</div>
+    <!-- 行情统计卡片 -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white border border-rose-200 rounded-2xl shadow-sm p-5">
+        <div class="text-xs text-rose-500 mb-2">大宗食材涨幅王</div>
+        <div class="font-semibold text-xl text-rose-600"><span id="pr-king-rise">—</span></div>
+      </div>
+      <div class="bg-white border border-emerald-200 rounded-2xl shadow-sm p-5">
+        <div class="text-xs text-emerald-600 mb-2">成本降幅王</div>
+        <div class="font-semibold text-xl text-emerald-700"><span id="pr-king-fall">—</span></div>
+      </div>
+      <div class="bg-white border border-amber-200 rounded-2xl shadow-sm p-5">
+        <div class="text-xs text-amber-600 mb-2">价格异常预警数</div>
+        <div class="font-semibold text-xl text-amber-700"><span id="pr-anomaly">—</span> 项</div>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+        <div class="text-xs text-slate-400 mb-2">大盘价格指数</div>
+        <div class="font-semibold text-xl text-slate-800"><span id="pr-index">—</span></div>
+      </div>
+    </div>
+    <!-- 走势图 + 筛选 -->
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div class="text-sm font-semibold text-slate-800">近 <span id="pr-range-label">30</span> 天价格走势</div>
+        <div class="flex items-center gap-2">
+          <select id="pr-filter" onchange="renderPriceChart()" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:outline-none">
+            <option value="all">全部分类</option>
+            <option value="主食">主食</option>
+            <option value="生鲜肉类">生鲜肉类</option>
+            <option value="水产海鲜">水产海鲜</option>
+            <option value="蔬菜时蔬">蔬菜时蔬</option>
+            <option value="调料">调料</option>
+          </select>
+          <select id="pr-range" onchange="updatePriceRange()" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:outline-none">
+            <option value="7">7 天</option>
+            <option value="30" selected>30 天</option>
+          </select>
+        </div>
+      </div>
+      <svg id="pr-chart" viewBox="0 0 800 260" class="w-full h-auto"></svg>
+    </div>
+    <!-- 每日报价明细表 -->
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div class="px-4 py-3 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">食材每日报价明细</div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm min-w-[900px]">
+          <thead>
+            <tr class="bg-slate-50 text-left text-xs text-slate-400 uppercase tracking-wide">
+              <th class="px-4 py-3">食材名称</th>
+              <th class="px-4 py-3">所属分类</th>
+              <th class="px-4 py-3">当前单价</th>
+              <th class="px-4 py-3">较昨日变动</th>
+              <th class="px-4 py-3">近7天最高/最低</th>
+              <th class="px-4 py-3">7天涨跌幅</th>
+              <th class="px-4 py-3">行情趋势</th>
+            </tr>
+          </thead>
+          <tbody id="pr-table-body"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <!-- 出库记录视图 -->
@@ -586,6 +645,7 @@
       if(name==='inventory') renderInventoryTable();
       if(name==='daily-sales') renderDailySalesSkeleton();
       if(name==='agents') renderAgents();
+      if(name==='price-reports') renderPriceReport();
     }
 
     function renderInventoryTable(){
@@ -734,6 +794,143 @@
             <button class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-500 text-xs hover:bg-slate-100 transition">查看运行日志</button>
           </div>
         </div>`).join('');
+    }
+
+    // ================= 菜品价格报表（模拟数据） =================
+    // 食材基准价（元）: 名称, 分类, 基准现价, 单位
+    const PRICE_SEEDS = [
+      { name:'东北大米',       cat:'主食',       base:5.0,  unit:'kg' },
+      { name:'面粉',           cat:'主食',       base:4.5,  unit:'kg' },
+      { name:'非转基因大豆油', cat:'调料',       base:15.0, unit:'L'  },
+      { name:'招牌特调酱油',   cat:'调料',       base:12.0, unit:'L'  },
+      { name:'优质猪肉',       cat:'生鲜肉类',   base:28.0, unit:'kg' },
+      { name:'鲜嫩鸡胸肉',     cat:'生鲜肉类',   base:18.0, unit:'kg' },
+      { name:'原切雪花牛肉',   cat:'生鲜肉类',   base:88.0, unit:'kg' },
+      { name:'冰鲜基围虾',     cat:'水产海鲜',   base:65.0, unit:'kg' },
+      { name:'有机菜心',       cat:'蔬菜时蔬',   base:8.0,  unit:'kg' },
+      { name:'高山土豆',       cat:'蔬菜时蔬',   base:4.0,  unit:'kg' },
+    ];
+    const PRICE_HISTORY = {}; // name -> [ {date, price} ]
+
+    function _seeded(i){ const x = Math.sin(i*127.1)*43758.5; return x - Math.floor(x); }
+    function _priceDate(i){ const d = new Date(2026, 5, 1 - i); return (d.getMonth()+1)+'/'+d.getDate(); }
+
+    function genPriceSeries(seed, days, drift){
+      const arr = [];
+      let p = seed.base * (1 - drift[0]);
+      for(let i=days-1;i>=0;i--){
+        // 稳定伪随机小幅波动 ±2%
+        p = p * (1 + (_seeded(seed.name.charCodeAt(0)+i)-0.5)*0.04);
+        arr.push({ date:_priceDate(i), price:Math.round(p*100)/100 });
+      }
+      // 强制首尾漂移：让终点相对基准呈现 drift
+      arr[arr.length-1] = { date:arr[arr.length-1].date, price: Math.round(seed.base*(1+drift[1])*100)/100 };
+      return arr;
+    }
+
+    function getSeries(forName){
+      if(!PRICE_HISTORY[forName]){
+        const seed = PRICE_SEEDS.find(s=>s.name===forName);
+        // drift[0]=基准前价系数, drift[1]=当前价相对基准变化（正涨负跌）
+        const driftMap = { '非转基因大豆油':[0.9,0.125], '优质猪肉':[1.06,-0.052], '原切雪花牛肉':[0.95,0.03] };
+        const drift = driftMap[forName] || [0.98, 0.01];
+        PRICE_HISTORY[forName] = genPriceSeries(seed, 30, drift);
+      }
+      return PRICE_HISTORY[forName];
+    }
+
+    function pct(a,b){ return ((a-b)/b)*100; }
+
+    function renderPriceReport(){
+      const summary = {};
+      PRICE_SEEDS.forEach(s=>{
+        const series = getSeries(s.name);
+        const cur = series[series.length-1].price;
+        const first = series[0].price;
+        summary[s.name] = { cat:s.unit? s.cat: s.cat, unit:s.unit, cur, first, series,
+          chg7: pct(cur, series[Math.max(0,series.length-8)].price),
+          chgAll: pct(cur, first),
+          hi7: Math.max(...series.slice(-8).map(x=>x.price)),
+          lo7: Math.min(...series.slice(-8).map(x=>x.price)),
+          delta1d: series[series.length-1].price - series[series.length-2].price,
+        };
+      });
+
+      // KPI
+      const byChg = Object.values(summary).sort((a,b)=>b.chgAll-a.chgAll);
+      const kingRise = byChg[0], kingFall = byChg[byChg.length-1];
+      document.getElementById('pr-king-rise').innerHTML = `${kingRise? kingRiseName(summary, kingRise):'—'} <span class="text-sm">↑</span>`;
+      document.getElementById('pr-king-fall').textContent = `${kingFall? kingFallName(summary, kingFall):'—'}`;
+      function kingRiseName(m,k){ const n=Object.keys(m).find(x=>m[x]===k); return `${n} +${k.chgAll.toFixed(1)}%`; }
+      function kingFallName(m,k){ const n=Object.keys(m).find(x=>m[x]===k); return `${n} ${k.chgAll.toFixed(1)}%`; }
+      const anomaly = Object.values(summary).filter(s=>Math.abs(s.chgAll)>20).length;
+      document.getElementById('pr-anomaly').textContent = anomaly;
+      const avgChg = Object.values(summary).reduce((a,s)=>a+s.chgAll,0)/Object.values(summary).length;
+      document.getElementById('pr-index').innerHTML = avgChg>=0 ? `轻微上涨 ↑${Math.abs(avgChg).toFixed(1)}%` : `轻微下跌 ↓${Math.abs(avgChg).toFixed(1)}%`;
+
+      // 表格
+      const tbody = document.getElementById('pr-table-body');
+      tbody.innerHTML = Object.entries(summary).map(([name,s])=>{
+        const d1 = s.delta1d; const d1pct = pct(s.cur, s.series[s.series.length-2].price);
+        const cell = d1>0
+          ? `<span class="text-rose-600 font-medium">+¥${d1.toFixed(2)}/${s.unit} (+${d1pct.toFixed(1)}%) ↑</span>`
+          : d1<0
+            ? `<span class="text-emerald-600 font-medium">-¥${Math.abs(d1).toFixed(2)}/${s.unit} (${d1pct.toFixed(1)}%) ↓</span>`
+            : `<span class="text-slate-400">0.0% -</span>`;
+        const chg = s.chg7;
+        const trend = chg>0
+          ? `<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-rose-50 text-rose-600 border border-rose-200">上涨 +${chg.toFixed(1)}%</span>`
+          : chg<0
+            ? `<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-600 border border-emerald-200">下降 ${chg.toFixed(1)}%</span>`
+            : `<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-500 border border-slate-200">平稳 0.0%</span>`;
+        return `<tr class="border-t border-slate-100 hover:bg-slate-50">
+          <td class="px-4 py-3 font-medium text-slate-800">${name}</td>
+          <td class="px-4 py-3 text-slate-500">${s.cat}</td>
+          <td class="px-4 py-3 tabular-nums">¥${s.cur.toFixed(2)}/${s.unit}</td>
+          <td class="px-4 py-3">${cell}</td>
+          <td class="px-4 py-3 tabular-nums text-slate-600">¥${s.hi7.toFixed(2)} / ¥${s.lo7.toFixed(2)}/${s.unit}</td>
+          <td class="px-4 py-3 tabular-nums ${chg>0?'text-rose-600':(chg<0?'text-emerald-600':'text-slate-400')}">${chg>0?'+':''}${chg.toFixed(1)}%</td>
+          <td class="px-4 py-3">${trend}</td>
+        </tr>`;
+      }).join('');
+
+      renderPriceChart();
+    }
+
+    function catMatch(cat, ingName){
+      const ing = PRICE_SEEDS.find(s=>s.name===ingName);
+      return cat==='all' || (ing && ing.cat===cat);
+    }
+    function updatePriceRange(){ document.getElementById('pr-range-label').textContent = document.getElementById('pr-range').value; renderPriceChart(); }
+
+    function renderPriceChart(){
+      const cat = document.getElementById('pr-filter').value;
+      const days = parseInt(document.getElementById('pr-range').value||'30',10);
+      const keys = PRICE_SEEDS.filter(s=>catMatch(cat,s.name)).map(s=>s.name);
+      const W=800, H=260, padL=42, padR=16, padT=16, padB=28;
+      let min=Infinity,max=-Infinity;
+      const seriesList = keys.map(k=>{ const s=getSeries(k).slice(-days); return {name:k, pts:s}; });
+      seriesList.forEach(s=>s.pts.forEach(p=>{ if(p.price<min)min=p.price; if(p.price>max)max=p.price; }));
+      if(!seriesList.length || min===Infinity){ document.getElementById('pr-chart').innerHTML=''; return; }
+      const range=max-min||1;
+      const x=i=> padL + i*(W-padL-padR)/(seriesList[0].pts.length-1||1);
+      const y=v=> H-padB - (v-min)/range*(H-padT-padB);
+      const palette=['#f43f5e','#10b981','#f59e0b','#6366f1','#14b8a6','#f97316','#8b5cf6','#0ea5e9'];
+      let svg='<line x1="'+padL+'" y1="'+y(0)+'" x2="'+(W-padR)+'" y2="'+y(0)+'" stroke="#e2e8f0" stroke-width="1"/>';
+      // y gridlines
+      for(let g=0;g<=4;g++){ const vv=min+range*g/4; const yy=y(vv); svg+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="#f1f5f9" stroke-width="1"/><text x="4" y="'+(yy+4)+'" font-size="10" fill="#94a3b8">¥'+vv.toFixed(1)+'</text>'; }
+      // x labels
+      const step=Math.ceil(seriesList[0].pts.length/6);
+      seriesList[0].pts.forEach((p,i)=>{ if(i%step===0) svg+='<text x="'+(x(i))+' " y="'+(H-10)+'" font-size="10" fill="#94a3b8" text-anchor="middle">'+p.date+'</text>'; });
+      seriesList.forEach((s,si)=>{
+        const pts = s.pts.map((p,i)=> x(i).toFixed(1)+','+y(p.price).toFixed(1)).join(' ');
+        svg += '<polyline points="'+pts+'" fill="none" stroke="'+palette[si%palette.length]+'" stroke-width="2"/>';
+      });
+      // legend
+      svg += '<g font-size="10" fill="#475569">';
+      seriesList.forEach((s,si)=>{ svg+='<circle cx="'+8+'" cy="'+(6+si*14)+'" r="3" fill="'+palette[si%palette.length]+'"/><text x="16" y="'+(10+si*14)+'">'+s.name+'</text>'; });
+      svg += '</g>';
+      document.getElementById('pr-chart').innerHTML = svg;
     }
   </script>
 
