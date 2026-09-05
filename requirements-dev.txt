@@ -1,0 +1,3 @@
+# 测试/开发依赖（业务运行时依赖见 requirements.txt）
+pytest
+pytest-asyncio
