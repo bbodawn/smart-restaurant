@@ -463,6 +463,22 @@
       </div>`;
     }
 
+    function escTxt(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+    function riskLevelCN(level){const m={'HIGH':'高','MEDIUM':'中','LOW':'低','UNKNOWN':'未知'};return (level && m[level])?m[level]:(level?escTxt(level):'');}
+    function renderRiskContent(o){
+      const a = (o.agent5_analysis && typeof o.agent5_analysis==='object') ? o.agent5_analysis : null;
+      if(a){
+        let html = `<div class="text-xs font-semibold text-slate-500 mb-1">风险等级：
+          <span class="${a.risk_level==='HIGH'?'text-rose-600':a.risk_level==='MEDIUM'?'text-amber-600':'text-slate-600'}">${riskLevelCN(a.risk_level)||'未知'}</span>风险</div>`;
+        if(a.summary) html += `<p class="text-slate-800 mb-1"><b>风险概述</b><br>${escTxt(a.summary)}</p>`;
+        if(a.risk_analysis) html += `<p class="text-slate-700 leading-relaxed whitespace-pre-line mb-1"><b>风险分析</b><br>${escTxt(a.risk_analysis)}</p>`;
+        if(a.recommendation) html += `<p class="text-slate-700 leading-relaxed"><b>采购建议</b><br>${escTxt(a.recommendation)}</p>`;
+        return html;
+      }
+      const legacy = (o.risk_analysis_report && String(o.risk_analysis_report).trim());
+      if(legacy){ return `<p class="text-slate-700 leading-relaxed whitespace-pre-line">${escTxt(legacy)}</p>`; }
+      return `<p class="text-slate-500">暂无完整智能风险分析，请结合下方采购数据人工审核。</p>`;
+    }
     function orderCard(o, showActions){
       const st = statusUI[o.status]||'bg-slate-100 text-slate-600 border-slate-200';
       const d = document.createElement('div');
@@ -491,8 +507,8 @@
               <p class="text-slate-700 leading-relaxed">${o.demand_reasoning || '—'}</p>
             </div>
             <div class="rounded-xl ${isSus?'bg-amber-50/60 border-amber-200':'bg-slate-50 border-slate-200'} border p-3">
-              <div class="text-[11px] font-semibold ${isSus?'text-amber-600':'text-slate-400'} mb-1">RiskAgent 风控分析</div>
-              <p class="text-slate-700 leading-relaxed whitespace-pre-line">${o.risk_analysis_report || '—'}</p>
+              <div class="text-[11px] font-semibold ${isSus?'text-amber-600':'text-slate-400'} mb-1">智能风控分析</div>
+              <div class="text-slate-700 leading-relaxed whitespace-pre-line">${renderRiskContent(o)}</div>
             </div>
           </div>
           ${showActions ? `

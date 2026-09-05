@@ -27,6 +27,17 @@ class PurchaseState(TypedDict, total=False):
 
     extension_agent_analysis: Optional[str]
 
+    # 并行分析结果容器（本轮 Phase 3-A 引入，作为只读分析层输出，不落数据库）
+    analysis_inventory: Optional[dict]
+    analysis_price: Optional[dict]
+    analysis_supplier: Optional[dict]
+
+    # 确定性业务规则层输出（Phase 3-A 引入；status/quantity/total_amount/risk_flags/risk_reason）
+    policy_decision: Optional[dict]
+
+    # Agent 5 风险综合分析输出（Phase 3-B Step 2；summary/risk_level/risk_analysis/recommendation）
+    agent5_analysis: Optional[dict]
+
     risk_reason: Optional[str]
     approved: Optional[bool]
 

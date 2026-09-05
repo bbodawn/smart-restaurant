@@ -3,12 +3,20 @@
 cd "$(dirname "$0")/.." || exit 1
 
 echo "=== 1/4 启动 Redis (Docker sr-redis-stack) ==="
-if docker inspect sr-redis-stack >/dev/null 2>&1; then
-  docker start sr-redis-stack >/dev/null 2>&1 && echo "[OK] Redis 容器已启动"
-else
+_redis_pub=$(docker inspect sr-redis-stack --format '{{ range .NetworkSettings.Ports }}{{ printf "%s/%s " .IP .HostPort }}{{ end }}' 2>/dev/null)
+case " $_redis_pub " in
+  *"0.0.0.0/6379"*|*"::/6379"*) ;;
+  *)
+    echo "[WARN] Redis 容器未发布到宿主 6379（本次连不上的根因），先删除并重建..."
+    docker rm -f sr-redis-stack >/dev/null 2>&1
+    docker run -d --name sr-redis-stack -p 6379:6379 redis/redis-stack-server:latest >/dev/null 2>&1
+    ;;
+esac
+if ! docker inspect sr-redis-stack >/dev/null 2>&1; then
   echo "[INFO] 创建 sr-redis-stack 容器..."
-  docker run -d --name sr-redis-stack -p 6379:6379 redis/redis-stack-server:latest
+  docker run -d --name sr-redis-stack -p 6379:6379 redis/redis-stack-server:latest >/dev/null 2>&1
 fi
+docker start sr-redis-stack >/dev/null 2>&1 && echo "[OK] Redis 容器已启动（含宿主 6379 发布）"
 sleep 2
 
 echo ""

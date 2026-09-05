@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +8,26 @@ from app.core.clock import get_current_date
 from app.core.db import get_db
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+async def _load_agent5_from_checkpoint(request: Request, thread_id: Any):
+    """从 LangGraph 读进行中(SUSPENDED)订单的 Agent5 中文解释（Phase 5-A）。
+
+    仅为展示补一条数据通路，不动 schema / 不做整块图；任何异常都返回 None，
+    不可让 /dashboard 因 Redis/checkpoint 不可用而 500。
+    """
+    try:
+        if not thread_id:
+            return None
+        graph = getattr(request.app.state, "graph", None)
+        if graph is None or not hasattr(graph, "aget_state"):
+            return None
+        snap = await graph.aget_state({"configurable": {"thread_id": thread_id}})
+        values = getattr(snap, "values", {}) or {}
+        a5 = values.get("agent5_analysis")
+        return a5 if isinstance(a5, dict) else None
+    except Exception:
+        return None
 
 # 食材分类映射（基于 Day 4 固定种子数据）
 _CATEGORY_MAP: Dict[str, str] = {
@@ -33,7 +53,7 @@ def _health(ratio: float) -> str:
 
 
 @router.get("")
-async def get_dashboard(db: AsyncSession = Depends(get_db)):
+async def get_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     # ---------- 库存看板 ----------
     inv_result = await db.execute(
         text(
@@ -76,6 +96,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             SELECT po.id, po.order_no, po.status, po.total_amount,
                    po.risk_reason, po.risk_analysis_report, po.demand_reasoning,
                    po.created_at, po.updated_at,
+                   po.thread_id,
                    poi.ingredient_id, poi.quantity
             FROM purchase_orders po
             LEFT JOIN purchase_order_items poi ON poi.order_id = po.id
@@ -113,6 +134,10 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             if updated_at and updated_at.strftime("%Y-%m") == current_month_prefix:
                 month_restock_amount += total_amount
 
+        agent5_analysis = None
+        if status == "SUSPENDED" and row["thread_id"]:
+            agent5_analysis = await _load_agent5_from_checkpoint(request, row["thread_id"])
+
         orders.append(
             {
                 "order_id": row["id"],
@@ -121,6 +146,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                 "quantity": float(row["quantity"]) if row["quantity"] else None,
                 "total_amount": total_amount,
                 "status": status,
+                "agent5_analysis": agent5_analysis,
                 "risk_reason": row["risk_reason"],
                 "risk_analysis_report": row["risk_analysis_report"],
                 "demand_reasoning": row["demand_reasoning"],

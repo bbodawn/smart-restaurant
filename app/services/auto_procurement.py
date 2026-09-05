@@ -5,6 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import get_current_date
+from app.core.lock import acquire_ingredient_lock, release_ingredient_lock
 from app.graph.state import PurchaseState
 from app.services.inventory import execute_inbound_stock
 
@@ -64,7 +65,18 @@ async def _has_open_order(db: AsyncSession, ingredient_id: int) -> bool:
 async def scan_and_trigger_procurement(
     db: AsyncSession, graph: Any
 ) -> List[Dict[str, Any]]:
-    """巡检所有低于安全库存线的食材，为缺货食材自动触发采购工作流。
+    """巡检当前库存低于“3 日预测需求”线的食材，自动触发采购工作流。
+
+    候选发现范围与 deterministic_policy 的采购触发逻辑对齐：
+      predicted_3_day_demand = daily_sales * 3
+      current_stock < predicted_3_day_demand  （且 daily_sales > 0）
+    落入 candidate 后，由 deterministic_policy 最终裁决为 PURCHASE / REVIEW /
+    NO_PURCHASE；其中 REVIEW（触及安全线或价格偏离等）仍走 Agent5+HITL，不自动入库。
+
+    并发保护（Phase 4 Production Hardening）：对每个候选按 ingredient 获取非阻塞
+    Redis 锁再加 DB open 检查（三层：ingredient lock + _has_open_order + execute 幂等）。
+    lock 只在本次 Auto Procurement 执行覆盖（到 REVIEW commit SUSPENDED / execute 完成），
+    **不跨真实 HITL**——人工审批由 approval API 的 order-level lock 另行处理。
 
     返回本次自动创建的采购单信息列表。
     """
@@ -74,20 +86,20 @@ async def scan_and_trigger_procurement(
             SELECT i.name
             FROM ingredients i
             JOIN inventory inv ON inv.ingredient_id = i.id
-            WHERE inv.current_stock <= inv.safety_stock
+            WHERE inv.daily_sales > 0
+              AND inv.current_stock < inv.daily_sales * 3
             """
         )
     )
     low_stock_ingredients = [row[0] for row in result.fetchall()]
 
     triggered: List[Dict[str, Any]] = []
-    for name in low_stock_ingredients:
-        bundle = await _load_ingredient_bundle(db, name)
-        if bundle is None:
-            continue
 
+    async def _process_one(bundle: Dict[str, Any]) -> None:
+        """对单个候选执行原采购闭环（在 ingredient lock 内运行）。"""
+        # DB 业务状态二次检查（Redis lock 失效时的第二道防线）
         if await _has_open_order(db, bundle["ingredient_id"]):
-            continue
+            return
 
         order_no = "PO-AUTO-" + uuid.uuid4().hex[:12].upper()
         thread_id = "auto-" + uuid.uuid4().hex
@@ -107,11 +119,14 @@ async def scan_and_trigger_procurement(
         )
         order_id = int(db_result.scalar_one())
 
+        # 全量 bundle 作为采购快照（保持原有逻辑不变）
+        ingredient_id = int(bundle["ingredient_id"])
+
         graph_state: PurchaseState = {
             "order_id": order_id,
             "order_no": order_no,
             "thread_id": thread_id,
-            "ingredient_id": int(bundle["ingredient_id"]),
+            "ingredient_id": ingredient_id,
             "ingredient": bundle["ingredient_name"],
             "unit": bundle["unit"],
             "current_stock": float(bundle["current_stock"]),
@@ -144,9 +159,22 @@ async def scan_and_trigger_procurement(
             quantity = float(interrupt_value.get("quantity", 0))
             supplier_price = float(interrupt_value.get("supplier_price", 0))
             total_amount = float(interrupt_value.get("total_amount", 0))
-            risk_analysis_report = interrupt_value.get("risk_analysis_report")
-            if not risk_analysis_report:
-                risk_analysis_report = interrupt_value.get("risk_reason")
+            # 用户可读报告：优先取 Agent5 结构化中文(summary/risk_analysis)，
+            # 其次取旧链路 risk_analysis_report；绝不拿英文 risk_reason 当文案。
+            raw_a5 = interrupt_value.get("agent5_analysis")
+            user_parts = []
+            if isinstance(raw_a5, dict):
+                for k in ("summary", "risk_analysis"):
+                    v = raw_a5.get(k)
+                    if isinstance(v, str) and v.strip():
+                        user_parts.append(v.strip())
+            if not user_parts:
+                legacy = interrupt_value.get("risk_analysis_report")
+                if isinstance(legacy, str) and legacy.strip():
+                    user_parts.append(legacy.strip())
+            risk_analysis_report = "\n".join(user_parts) or (
+                "暂无完整智能风险分析，请结合采购数据进行人工审核。"
+            )
 
             await db.execute(
                 text(
@@ -178,7 +206,7 @@ async def scan_and_trigger_procurement(
                 ),
                 {
                     "order_id": order_id,
-                    "ingredient_id": int(bundle["ingredient_id"]),
+                    "ingredient_id": ingredient_id,
                     "quantity": quantity,
                     "unit_price": supplier_price,
                     "total_price": total_amount,
@@ -197,11 +225,15 @@ async def scan_and_trigger_procurement(
                     "risk_analysis_report": risk_analysis_report,
                 }
             )
-            continue
+            return
 
+        pd = run_result.get("policy_decision") or {}
+        is_purchase = pd.get("status") == "PURCHASE"
         final_status = run_result.get("status", "UNKNOWN")
-        quantity_auto = float(run_result.get("quantity", 0))
-        total_amount_auto = float(run_result.get("total_amount", 0))
+        # 采购决策数量以 policy_decision 为准（新链路 quantity 唯一来源在此；
+        # 顶层 state["quantity"] 仍为历史默认 0，不能作为入库依据）。
+        quantity_auto = float(pd.get("quantity", 0) if pd.get("quantity") else 0) if is_purchase else 0.0
+        total_amount_auto = float(pd.get("total_amount", 0) if pd.get("total_amount") else 0) if is_purchase else float(run_result.get("total_amount", 0) or 0)
 
         # 非中断路径（NO_PURCHASE/PURCHASE_CREATED 等）也记录采购明细，供看板展示
         if quantity_auto > 0:
@@ -216,7 +248,7 @@ async def scan_and_trigger_procurement(
                 ),
                 {
                     "order_id": order_id,
-                    "ingredient_id": int(bundle["ingredient_id"]),
+                    "ingredient_id": ingredient_id,
                     "quantity": quantity_auto,
                     "unit_price": float(bundle["current_price"]),
                     "total_price": total_amount_auto,
@@ -226,11 +258,9 @@ async def scan_and_trigger_procurement(
 
         # 低风险自动放行（无需人工审批）直接调用强绑定物理入库，
         # 库存原子累加 + 订单置 COMPLETED + 写 completed_at + commit。
-        # 该路径只在有实际采购量时入库；NO_PURCHASE(quantity=0) 不涉及库存。
         if quantity_auto > 0:
-            inbound = await execute_inbound_stock(db, order_id)
+            _ = await execute_inbound_stock(db, order_id)
             final_status = "COMPLETED"
-            # 补写需求推理等附加信息
             await db.execute(
                 text(
                     """
@@ -275,5 +305,20 @@ async def scan_and_trigger_procurement(
                 "risk_analysis_report": run_result.get("risk_analysis_report"),
             }
         )
+
+    for name in low_stock_ingredients:
+        bundle = await _load_ingredient_bundle(db, name)
+        if bundle is None:
+            continue
+
+        lock = await acquire_ingredient_lock(bundle["ingredient_id"])
+        if lock is None:
+            # 其它 worker 正在处理该 ingredient —— 跳过，不让整个扫描阻塞
+            continue
+
+        try:
+            await _process_one(bundle)
+        finally:
+            await release_ingredient_lock(lock)
 
     return triggered
