@@ -6,6 +6,7 @@ USE restaurant;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS inbound_records;
 DROP TABLE IF EXISTS purchase_order_items;
 DROP TABLE IF EXISTS purchase_orders;
 DROP TABLE IF EXISTS suppliers;
@@ -57,17 +58,22 @@ CREATE TABLE purchase_orders (
     order_no VARCHAR(64) NOT NULL UNIQUE,
     thread_id VARCHAR(128) NOT NULL UNIQUE,
     status VARCHAR(30) NOT NULL DEFAULT 'RUNNING',
+    source VARCHAR(10) NOT NULL COMMENT '采购来源: AUTO / MANUAL（Phase 6-B-1）',
     total_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
     risk_reason VARCHAR(500) NULL,
     risk_analysis_report TEXT NULL,
     demand_reasoning TEXT NULL,
     suspended_virtual_date DATE NULL,
     completed_at DATE NULL,
+    approval_reason VARCHAR(255) NULL,
+    approved_virtual_date DATE NULL,
+    rejected_virtual_date DATE NULL,
     idempotency_key VARCHAR(128) NULL UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ON UPDATE CURRENT_TIMESTAMP,
 
+    CONSTRAINT chk_po_source CHECK (source IN ('AUTO','MANUAL')),
     INDEX idx_purchase_status (status),
     INDEX idx_purchase_thread (thread_id)
 ) ENGINE=InnoDB;
@@ -94,7 +100,39 @@ CREATE TABLE purchase_order_items (
         FOREIGN KEY (supplier_id)
         REFERENCES suppliers(id),
 
+    CONSTRAINT uq_po_item UNIQUE (order_id, ingredient_id),
+
     INDEX idx_item_order (order_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE inbound_records (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    record_no VARCHAR(64) NOT NULL COMMENT '入库单号 = INBOUND-YYYYMMDD-order_item_id(8位)',
+    order_id BIGINT NOT NULL COMMENT '冗余父订单引用（一致性由 service 单点构造保证）',
+    order_item_id BIGINT NOT NULL COMMENT '对应采购明细，1:1',
+    ingredient_id BIGINT NOT NULL COMMENT '冗余，便于直查',
+    inbound_qty DECIMAL(12,2) NOT NULL,
+    unit_price DECIMAL(12,2) NOT NULL,
+    total_price DECIMAL(12,2) NOT NULL,
+    supplier_id BIGINT NOT NULL COMMENT '快照冗余',
+    inbound_virtual_date DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT uq_inbound_record_no UNIQUE (record_no),
+    CONSTRAINT uq_inbound_order_item UNIQUE (order_item_id),
+    CONSTRAINT chk_inbound_qty CHECK (inbound_qty > 0),
+    CONSTRAINT chk_inbound_prices CHECK (unit_price >= 0 AND total_price >= 0),
+    CONSTRAINT fk_inbound_order
+        FOREIGN KEY (order_id) REFERENCES purchase_orders(id),
+    CONSTRAINT fk_inbound_order_item
+        FOREIGN KEY (order_item_id) REFERENCES purchase_order_items(id),
+    CONSTRAINT fk_inbound_ingredient
+        FOREIGN KEY (ingredient_id) REFERENCES ingredients(id),
+    CONSTRAINT fk_inbound_supplier
+        FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+
+    INDEX idx_inbound_order (order_id),
+    INDEX idx_inbound_ingredient (ingredient_id)
 ) ENGINE=InnoDB;
 
 -- ============ Day 4 种子数据：10 种典型餐饮食材 ============

@@ -71,7 +71,7 @@ async def _bootstrap_db():
                 continue
             await cur.execute(s)
         # 清掉 init.sql 的 10 条默认种子，避免干扰候选扫描；只保留本套件播种的食材
-        for t in ("purchase_order_items", "purchase_orders", "suppliers", "inventory", "ingredients"):
+        for t in ("inbound_records", "purchase_order_items", "purchase_orders", "suppliers", "inventory", "ingredients"):
             await cur.execute(f"DELETE FROM `{t}`")
         await cur.close()
     finally:

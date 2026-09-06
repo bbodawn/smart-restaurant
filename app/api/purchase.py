@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from langgraph.types import Command
 
+from app.core.clock import get_current_date
 from app.core.db import get_db
 from app.services.inventory import execute_inbound_stock
 from app.core.idempotency import (
@@ -76,8 +77,8 @@ async def create_purchase(
         await db.execute(
             text(
                 """
-                INSERT INTO purchase_orders (order_no, thread_id, status, idempotency_key)
-                VALUES (:order_no, :thread_id, 'RUNNING', :idempotency_key)
+                INSERT INTO purchase_orders (order_no, thread_id, status, source, idempotency_key)
+                VALUES (:order_no, :thread_id, 'RUNNING', 'MANUAL', :idempotency_key)
                 """
             ),
             {
@@ -347,6 +348,23 @@ async def approve_purchase_order(
                 config=config,
             )
 
+            # 1.5 记录人工审批原因与虚拟业务日期（与入库同一会话，随 execute_inbound_stock 一并 commit）
+            await db.execute(
+                text(
+                    """
+                    UPDATE purchase_orders
+                    SET approval_reason = :approval_reason,
+                        approved_virtual_date = :approved_virtual_date
+                    WHERE id = :order_id AND status = 'SUSPENDED'
+                    """
+                ),
+                {
+                    "approval_reason": request_body.approval_reason,
+                    "approved_virtual_date": get_current_date().isoformat(),
+                    "order_id": order_id,
+                },
+            )
+
             # 2. 调用强绑定物理入库：库存累加 + 标 COMPLETED + 写 completed_at + commit
             inbound = await execute_inbound_stock(db, order_id)
 
@@ -361,16 +379,22 @@ async def approve_purchase_order(
                 "current_stock": inbound.get("current_stock"),
             }
 
-        # approved == False -> REJECTED
+        # approved == False -> REJECTED（approval_reason 保存审批时填写的业务原因）
         await db.execute(
             text(
                 """
                 UPDATE purchase_orders
-                SET status = 'REJECTED'
+                SET status = 'REJECTED',
+                    approval_reason = :approval_reason,
+                    rejected_virtual_date = :rejected_virtual_date
                 WHERE id = :order_id AND status = 'SUSPENDED'
                 """
             ),
-            {"order_id": order_id},
+            {
+                "approval_reason": request_body.approval_reason,
+                "rejected_virtual_date": get_current_date().isoformat(),
+                "order_id": order_id,
+            },
         )
         await db.commit()
 

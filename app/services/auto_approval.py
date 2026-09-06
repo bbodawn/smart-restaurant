@@ -19,6 +19,23 @@ async def _complete_and_restock(
     config = {"configurable": {"thread_id": thread_id}}
     await graph.ainvoke(Command(resume={"approved": True}), config=config)
 
+    # 系统超时自动放行：记录决策原因与虚拟业务日期（随 execute_inbound_stock 一并 commit）
+    await db.execute(
+        text(
+            """
+            UPDATE purchase_orders
+            SET approval_reason = :approval_reason,
+                approved_virtual_date = :approved_virtual_date
+            WHERE id = :order_id AND status = 'SUSPENDED'
+            """
+        ),
+        {
+            "approval_reason": "system auto-approve (suspended timeout)",
+            "approved_virtual_date": get_current_date().isoformat(),
+            "order_id": order_id,
+        },
+    )
+
     inbound = await execute_inbound_stock(db, order_id)
     return {
         "order_id": order_id,

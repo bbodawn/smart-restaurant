@@ -107,8 +107,8 @@ async def scan_and_trigger_procurement(
         await db.execute(
             text(
                 """
-                INSERT INTO purchase_orders (order_no, thread_id, status)
-                VALUES (:order_no, :thread_id, 'RUNNING')
+                INSERT INTO purchase_orders (order_no, thread_id, status, source)
+                VALUES (:order_no, :thread_id, 'RUNNING', 'AUTO')
                 """
             ),
             {"order_no": order_no, "thread_id": thread_id},

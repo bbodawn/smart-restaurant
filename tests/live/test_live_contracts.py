@@ -20,7 +20,8 @@ async def _insert_order(db, *, status="RUNNING", thread=None, order_no=None, tot
     order_no = order_no or "PO-" + uuid.uuid4().hex[:16].upper()
     thread = thread or uuid.uuid4().hex
     await db.execute(
-        text("INSERT INTO purchase_orders (order_no, thread_id, status, total_amount) VALUES (:o,:t,:s,:a)"),
+        text("""INSERT INTO purchase_orders (order_no, thread_id, status, source, total_amount)
+                VALUES (:o,:t,:s,'AUTO',:a)"""),
         {"o": order_no, "t": thread, "s": status, "a": total_amount},
     )
     order_id = int((await db.execute(
