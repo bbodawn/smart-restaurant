@@ -188,16 +188,29 @@ async def create_purchase(
                 supplier_price = float(interrupt_value.get("supplier_price", 0))
                 reasons = interrupt_value.get("risk_reason", [])
                 risk_reason = ",".join(reasons)
+                a5 = interrupt_value.get("agent5_analysis") or {}
 
                 await db.execute(
                     text(
                         """
                         UPDATE purchase_orders
-                        SET status = 'SUSPENDED', total_amount = :total_amount, risk_reason = :risk_reason
+                        SET status = 'SUSPENDED', total_amount = :total_amount, risk_reason = :risk_reason,
+                            agent5_summary = :a5_summary,
+                            agent5_risk_level = :a5_risk_level,
+                            agent5_risk_analysis = :a5_risk_analysis,
+                            agent5_recommendation = :a5_recommendation
                         WHERE id = :order_id
                         """
                     ),
-                    {"total_amount": total_amount, "risk_reason": risk_reason, "order_id": order_id},
+                    {
+                        "total_amount": total_amount,
+                        "risk_reason": risk_reason,
+                        "a5_summary": (a5 or {}).get("summary"),
+                        "a5_risk_level": (a5 or {}).get("risk_level"),
+                        "a5_risk_analysis": (a5 or {}).get("risk_analysis"),
+                        "a5_recommendation": (a5 or {}).get("recommendation"),
+                        "order_id": order_id,
+                    },
                 )
 
                 await db.execute(

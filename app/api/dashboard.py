@@ -94,12 +94,17 @@ async def get_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         text(
             """
             SELECT po.id, po.order_no, po.status, po.total_amount,
-                   po.risk_reason, po.risk_analysis_report, po.demand_reasoning,
+                   po.source, po.risk_reason, po.risk_analysis_report, po.demand_reasoning,
+                   po.approval_reason, po.approved_virtual_date, po.rejected_virtual_date,
                    po.created_at, po.updated_at,
                    po.thread_id,
-                   poi.ingredient_id, poi.quantity
+                   po.agent5_summary, po.agent5_risk_level,
+                   po.agent5_risk_analysis, po.agent5_recommendation,
+                   poi.ingredient_id, poi.quantity, poi.unit_price,
+                   sup.name AS supplier_name
             FROM purchase_orders po
             LEFT JOIN purchase_order_items poi ON poi.order_id = po.id
+            LEFT JOIN suppliers sup ON sup.id = poi.supplier_id
             ORDER BY po.id DESC
             """
         )
@@ -134,8 +139,18 @@ async def get_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             if updated_at and updated_at.strftime("%Y-%m") == current_month_prefix:
                 month_restock_amount += total_amount
 
-        agent5_analysis = None
-        if status == "SUSPENDED" and row["thread_id"]:
+        # Agent5 恢复（Phase 6-C）：MySQL agent5_* 快照为 authoritative；
+        # 仅当 MySQL 为空时才只读回退 checkpoint，绝不反向写库 / 覆盖。
+        mysql_a5 = None
+        if row["agent5_summary"] is not None or row["agent5_risk_level"] is not None:
+            mysql_a5 = {
+                "summary": row["agent5_summary"],
+                "risk_level": row["agent5_risk_level"],
+                "risk_analysis": row["agent5_risk_analysis"],
+                "recommendation": row["agent5_recommendation"],
+            }
+        agent5_analysis = mysql_a5
+        if agent5_analysis is None and status == "SUSPENDED" and row["thread_id"]:
             agent5_analysis = await _load_agent5_from_checkpoint(request, row["thread_id"])
 
         orders.append(
@@ -143,13 +158,19 @@ async def get_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
                 "order_id": row["id"],
                 "order_no": row["order_no"],
                 "ingredient": name_map.get(row["ingredient_id"], "未知") if row["ingredient_id"] else None,
+                "source": row["source"],
+                "supplier_name": row["supplier_name"],
                 "quantity": float(row["quantity"]) if row["quantity"] else None,
+                "unit_price": float(row["unit_price"]) if row["unit_price"] is not None else None,
                 "total_amount": total_amount,
                 "status": status,
                 "agent5_analysis": agent5_analysis,
                 "risk_reason": row["risk_reason"],
                 "risk_analysis_report": row["risk_analysis_report"],
                 "demand_reasoning": row["demand_reasoning"],
+                "approval_reason": row["approval_reason"],
+                "approved_virtual_date": row["approved_virtual_date"].isoformat() if row["approved_virtual_date"] else None,
+                "rejected_virtual_date": row["rejected_virtual_date"].isoformat() if row["rejected_virtual_date"] else None,
                 "created_at": row["created_at"].isoformat() if row["created_at"] else None,
                 "updated_at": updated_at.isoformat() if updated_at else None,
             }

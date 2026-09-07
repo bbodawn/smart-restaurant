@@ -43,3 +43,18 @@ def test_internal_fields_not_rendered_in_frontend():
     html = INDEX.read_text(encoding="utf-8")
     assert "risk_flags" not in html
     assert "risk_reason" not in html
+
+
+def test_source_and_approval_labels_rendered():
+    """Phase 6-D：采购方式/供应商/审批意见在订单卡可见（文案经 escTxt）。"""
+    html = INDEX.read_text(encoding="utf-8")
+    start = html.index("function orderCard")
+    end = html.index("function renderOrders", start)
+    card = html[start:end]
+    assert "🤖 自动采购" in card
+    assert "👤 人工审批" in card
+    assert "o.supplier_name" in card
+    assert "o.unit_price" in card
+    assert "escTxt(o.approval_reason)" in card
+    assert "escTxt(o.approved_virtual_date)" in card
+    assert "审批意见：" in card

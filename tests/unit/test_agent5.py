@@ -8,7 +8,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.graph.nodes import Agent5RiskAnalysis, agent5_node
+from app.graph.nodes import Agent5RiskAnalysis, Agent5RiskAnalysisRaw, agent5_node
 
 # 一份真实 REVIEW 图路径会产生的输入快照
 REVIEW_STATE = {
@@ -70,9 +70,9 @@ def test_agent5_schema_forbids_extra_fields():
 async def test_agent5_returns_structured_analysis(monkeypatch):
     class FakeStructured:
         async def ainvoke(self, prompt):
-            return Agent5RiskAnalysis(
+            return Agent5RiskAnalysisRaw(
                 summary="库存跌破安全线且报价偏高。",
-                risk_level="HIGH",
+                risk_level="中高",  # LLM 常见中文输出 → normalize 应收口 HIGH
                 risk_analysis="当前库存低于安全线，3日需求无法满足。",
                 recommendation="建议人工确认到货时效后放行。",
             )
@@ -85,7 +85,7 @@ async def test_agent5_returns_structured_analysis(monkeypatch):
     assert set(result) == {"agent5_analysis"}
     a5 = result["agent5_analysis"]
     assert a5["summary"].startswith("库存跌破安全线")
-    assert a5["risk_level"] == "HIGH"
+    assert a5["risk_level"] == "HIGH"  # "中高" 被归一（业务安全规则）
     assert a5["risk_analysis"]
     assert a5["recommendation"]
     assert set(a5) == FALLBACK_KEYS

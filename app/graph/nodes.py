@@ -1,3 +1,5 @@
+from typing import Literal
+
 from langgraph.graph import END
 from langgraph.types import Command, interrupt
 from pydantic import BaseModel, ConfigDict, Field
@@ -362,9 +364,37 @@ def deterministic_policy_node(state: PurchaseState) -> dict:
     }
 
 
-class Agent5RiskAnalysis(BaseModel):
-    """Agent 5 结构化输出：风险综合分析与业务解释。
+RISK_LEVEL_HIGH = ("high", "严重", "极高", "中高", "高")
+RISK_LEVEL_MEDIUM = ("medium", "中等", "中")
+RISK_LEVEL_LOW = ("low", "低")
+RISK_LEVEL_UNKNOWN = ("unknown", "未知")
 
+
+def normalize_risk_level(raw) -> Literal["HIGH", "MEDIUM", "LOW", "UNKNOWN"]:
+    """把 LLM 返回的风险等级归一到 canonical 枚举（Phase 6-C 冻结规则）。
+
+    注意：「中高 → HIGH」是当前系统出于审批安全做出的业务归一规则，
+    **不是**自然语言分类的唯一正确答案 —— 勿在日后误解为模型标准。
+    非法/未知输入绝不抛异常、绝不猜测成 HIGH，统一回退 UNKNOWN。
+    """
+    if not isinstance(raw, str):
+        return "UNKNOWN"
+    token = raw.strip().lower()
+    if token in RISK_LEVEL_HIGH:
+        return "HIGH"
+    if token in RISK_LEVEL_MEDIUM:
+        return "MEDIUM"
+    if token in RISK_LEVEL_LOW:
+        return "LOW"
+    if token in RISK_LEVEL_UNKNOWN:
+        return "UNKNOWN"
+    return "UNKNOWN"
+
+
+class Agent5RiskAnalysis(BaseModel):
+    """Agent 5 canonical 结构化输出：风险综合分析与业务解释。
+
+    risk_level 收口为 Literal（Phase 6-C），构造前必须先经 normalize_risk_level。
     仅生成面向人工审核的自然语言分析/建议文本；不含任何决策/状态字段
     （如 status / approved / quantity），禁止改变 deterministic_policy 的结论。
     """
@@ -372,9 +402,27 @@ class Agent5RiskAnalysis(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     summary: str = Field(description="结合库存/价格/供应商与分析结论的一句话概况（中文）")
-    risk_level: str = Field(description="综合风险等级，如 HIGH / MEDIUM / LOW")
+    risk_level: Literal["HIGH", "MEDIUM", "LOW", "UNKNOWN"] = Field(
+        description="综合风险等级 canonical 枚举，仅允许 HIGH/MEDIUM/LOW/UNKNOWN"
+    )
     risk_analysis: str = Field(description="解释当前触发 REVIEW 的风险及业务影响（中文，不得虚构数据）")
     recommendation: str = Field(description="给人工审核的建议文本（中文，仅是建议，不是路由/审批命令）")
+
+
+class Agent5RiskAnalysisRaw(BaseModel):
+    """供 LLM 宽松提取的中间 schema（不约束 risk_level 词表）。
+
+    LLM 可能返回 中高/中等/高 等自然语言值；先宽松解析，再 normalize_risk_level
+    收口到 canonical，最后用 Agent5RiskAnalysis(Literal) 构造，避免 Literal 直接把
+    中文值拒绝成 UNKNOWN。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = Field(description="一句话概况（中文）")
+    risk_level: str = Field(description="风险等级（可为中文，如 高/中高/中/低/未知）")
+    risk_analysis: str = Field(description="风险与业务影响分析（中文）")
+    recommendation: str = Field(description="给人工审核的建议文本（中文）")
 
 
 async def agent5_node(state: PurchaseState) -> dict:
@@ -450,9 +498,20 @@ async def agent5_node(state: PurchaseState) -> dict:
     )
 
     try:
-        llm = get_structured_llm(Agent5RiskAnalysis)
+        # 两段式（Phase 6-C Option C）：宽松提取 → normalize → Literal canonical
+        def _text(v) -> str:
+            return v if isinstance(v, str) else ("" if v is None else str(v))
+
+        llm = get_structured_llm(Agent5RiskAnalysisRaw)
         parsed = await llm.ainvoke(prompt)
-        result = parsed.model_dump() if hasattr(parsed, "model_dump") else dict(parsed)
+        raw = parsed.model_dump() if hasattr(parsed, "model_dump") else dict(parsed)
+        canonical = Agent5RiskAnalysis(
+            summary=_text(raw.get("summary")),
+            risk_level=normalize_risk_level(raw.get("risk_level")),
+            risk_analysis=_text(raw.get("risk_analysis")),
+            recommendation=_text(raw.get("recommendation")),
+        )
+        result = canonical.model_dump()
     except Exception:
         result = fallback
 

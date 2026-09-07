@@ -68,6 +68,10 @@ CREATE TABLE purchase_orders (
     approval_reason VARCHAR(255) NULL,
     approved_virtual_date DATE NULL,
     rejected_virtual_date DATE NULL,
+    agent5_summary TEXT NULL COMMENT 'REVIEW 决策时 Agent5 快照(Phase 6-C)',
+    agent5_risk_level VARCHAR(16) NULL,
+    agent5_risk_analysis TEXT NULL,
+    agent5_recommendation TEXT NULL,
     idempotency_key VARCHAR(128) NULL UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

@@ -491,11 +491,16 @@
             <div>
               <div class="font-medium text-slate-800">${o.ingredient||'未知食材'}</div>
               <div class="text-xs text-slate-400">${o.order_no}</div>
+              <div class="text-xs text-slate-400 mt-0.5">
+                ${o.supplier_name?escTxt(o.supplier_name):''}${o.unit_price!=null&&o.unit_price!==undefined?' · ¥'+o.unit_price+'/kg':''}
+              </div>
+              ${o.approval_reason?`<div class="text-xs text-amber-600 mt-0.5">审批意见：${escTxt(o.approval_reason)}${o.approved_virtual_date?(' · 批准 '+escTxt(o.approved_virtual_date)):''}${o.rejected_virtual_date?(' · 驳回 '+escTxt(o.rejected_virtual_date)):''}</div>`:''}
             </div>
           </div>
           <div class="flex items-center gap-4 flex-wrap">
             <span class="text-sm text-slate-600">数量 <b class="tabular-nums">${o.quantity??'—'}</b> kg</span>
             <span class="text-sm text-slate-500">¥<b class="tabular-nums">${(+o.total_amount).toFixed(2)}</b></span>
+            <span class="text-xs px-2 py-1 rounded-full border font-medium ${o.source==='AUTO'?'bg-sky-50 text-sky-700 border-sky-200':(o.source==='MANUAL'?'bg-violet-50 text-violet-700 border-violet-200':'bg-slate-100 text-slate-500 border-slate-200')}">${o.source==='AUTO'?'🤖 自动采购':(o.source==='MANUAL'?'👤 人工审批':(escTxt(o.source)||'—'))}</span>
             <span class="text-xs px-2.5 py-1 rounded-full border font-medium ${st}">${o.status}</span>
           </div>
         </div>

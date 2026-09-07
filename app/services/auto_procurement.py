@@ -176,6 +176,7 @@ async def scan_and_trigger_procurement(
                 "暂无完整智能风险分析，请结合采购数据进行人工审核。"
             )
 
+            a5d = raw_a5 if isinstance(raw_a5, dict) else {}
             await db.execute(
                 text(
                     """
@@ -183,7 +184,11 @@ async def scan_and_trigger_procurement(
                     SET status = 'SUSPENDED', total_amount = :total_amount,
                         risk_analysis_report = :risk_analysis_report,
                         demand_reasoning = :demand_reasoning,
-                        suspended_virtual_date = :suspended_virtual_date
+                        suspended_virtual_date = :suspended_virtual_date,
+                        agent5_summary = :a5_summary,
+                        agent5_risk_level = :a5_risk_level,
+                        agent5_risk_analysis = :a5_risk_analysis,
+                        agent5_recommendation = :a5_recommendation
                     WHERE id = :order_id
                     """
                 ),
@@ -192,6 +197,10 @@ async def scan_and_trigger_procurement(
                     "risk_analysis_report": risk_analysis_report,
                     "demand_reasoning": run_result.get("demand_reasoning", ""),
                     "suspended_virtual_date": get_current_date().isoformat(),
+                    "a5_summary": a5d.get("summary"),
+                    "a5_risk_level": a5d.get("risk_level"),
+                    "a5_risk_analysis": a5d.get("risk_analysis"),
+                    "a5_recommendation": a5d.get("recommendation"),
                     "order_id": order_id,
                 },
             )
