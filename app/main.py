@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 
 from app.api.dashboard import router as dashboard_router
+from app.api.inbound import router as inbound_router
 from app.api.ingredients import router as ingredients_router
 from app.api.intent import router as intent_router
 from app.api.purchase import router as purchase_router
@@ -40,6 +41,7 @@ app = FastAPI(
 )
 
 app.include_router(purchase_router, prefix="/api/v1")
+app.include_router(inbound_router, prefix="/api/v1")
 app.include_router(intent_router, prefix="/api/v1")
 app.include_router(test_time_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")

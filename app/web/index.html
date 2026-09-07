@@ -279,11 +279,28 @@
 
   <!-- 入库管理视图 -->
   <div id="view-inbound" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
-    <div>
-      <h2 class="text-base font-semibold text-slate-800">入库管理</h2>
-      <p class="text-xs text-slate-400 mt-0.5">HITL 待办审批与入库履约历史</p>
+    <div class="flex items-center justify-between flex-wrap gap-2">
+      <div>
+        <h2 class="text-base font-semibold text-slate-800">入库管理</h2>
+        <p class="text-xs text-slate-400 mt-0.5">采购订单生命周期 · 自动采购 / 人工审批 / 入库结果（业务执行视图）</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <select id="inb-status" onchange="renderInboundOrders()" class="px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white">
+          <option value="">全部状态</option>
+          <option value="RUNNING">处理中</option>
+          <option value="SUSPENDED">待审核</option>
+          <option value="COMPLETED">已完成</option>
+          <option value="REJECTED">已拒绝</option>
+        </select>
+        <select id="inb-source" onchange="renderInboundOrders()" class="px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white">
+          <option value="">全部来源</option>
+          <option value="AUTO">🤖 自动采购</option>
+          <option value="MANUAL">👤 人工审批</option>
+        </select>
+      </div>
     </div>
-    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm">入库管理模块 · 待接入数据</div>
+    <div id="inbound-stats" class="grid grid-cols-2 lg:grid-cols-4 gap-4"></div>
+    <div id="inbound-list" class="space-y-3"></div>
   </div>
 
   <!-- 合作供应商视图 -->
@@ -713,6 +730,7 @@
       if(name==='agents') renderAgents();
       if(name==='price-reports') renderPriceReport();
       if(name==='stock-out') renderStockOutLogs();
+      if(name==='inbound') renderInboundOrders();
     }
 
     function renderInventoryTable(){
@@ -981,6 +999,96 @@
         : '<tr class="border-t border-slate-100"><td colspan="7" class="px-4 py-10 text-center text-slate-400 text-sm">暂无出库记录，请在控制台快进天数生成</td></tr>';
     }
 
+    // ============= 入库管理（Phase 8）：采购订单生命周期视图 =============
+    let _inbOrders = [];
+    const inbStatusMap = {
+      COMPLETED: ['已入库','bg-emerald-50 text-emerald-700 border-emerald-200'],
+      SUSPENDED: ['待审核','bg-amber-50 text-amber-700 border-amber-200'],
+      REJECTED:  ['已拒绝','bg-rose-50 text-rose-700 border-rose-200'],
+      RUNNING:   ['处理中','bg-slate-100 text-slate-600 border-slate-200']
+    };
+    function inbSrcChip(o){ return o.source==='AUTO'?'🤖 自动采购':(o.source==='MANUAL'?'👤 人工审批':(escTxt(o.source)||'—')); }
+    function inbCell(t, v){ return v?`<div class="text-xs text-slate-500 mb-0.5">${t}</div><div class="text-sm text-slate-800 mb-2">${v}</div>`:''; }
+    async function renderInboundOrders(){
+      try{
+        _inbOrders = await api('/inbound/orders');
+        renderInboundStats(); renderInboundList();
+      }catch(e){ showToast('入库管理加载失败：'+e.message); }
+    }
+    function renderInboundStats(){
+      const s={pending:0,auto:0,inbound:0,rejected:0};
+      _inbOrders.forEach(o=>{
+        if(o.status==='SUSPENDED') s.pending++;
+        if(o.source==='AUTO') s.auto++;
+        if(o.inbound_status==='已入库') s.inbound++;
+        if(o.status==='REJECTED') s.rejected++;
+      });
+      const cards=[['待审核订单',s.pending],['自动采购',s.auto],['已入库',s.inbound],['已拒绝',s.rejected]];
+      document.getElementById('inbound-stats').innerHTML = cards.map(([k,v])=>
+        `<div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5"><div class="text-xs text-slate-400 mb-1">${k}</div><div class="font-semibold text-2xl tabular-nums text-slate-800">${v}</div></div>`).join('');
+    }
+    function filterInbound(){
+      const st=document.getElementById('inb-status').value, sc=document.getElementById('inb-source').value;
+      return _inbOrders.filter(o=> (!st||o.status===st) && (!sc||o.source===sc));
+    }
+    function inboundDetailHTML(o){
+      const a = (o.agent5_analysis && typeof o.agent5_analysis==='object') ? o.agent5_analysis : null;
+      const lv = a && (riskLevelCN(a.risk_level) || escTxt(a.risk_level||''));
+      return `<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+        <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
+          <div class="text-[11px] font-semibold text-slate-400 mb-1">采购明细</div>
+          ${inbCell('食材 / 分类', escTxt(o.ingredient||'')+' · '+escTxt(o.category||'—'))}
+          ${inbCell('数量', (o.quantity??'—')+' '+escTxt(o.unit||'kg'))}
+          ${inbCell('单价', '¥'+(o.unit_price??'—'))}
+          ${inbCell('金额', '¥'+(+o.total_amount).toFixed(2))}
+        </div>
+        <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
+          <div class="text-[11px] font-semibold text-slate-400 mb-1">供应商与审核</div>
+          ${inbCell('供应商', escTxt(o.supplier_name||'—'))}
+          ${inbCell('报价', '¥'+(o.supplier_quote??'—'))}
+          ${inbCell('审核状态', escTxt(o.approval_status||'')+' · 审核人 '+escTxt(o.reviewer_display??'-'))}
+          ${o.approval_reason?inbCell('审批原因',escTxt(o.approval_reason)):''}
+          ${o.approved_virtual_date?inbCell('批准日期',escTxt(o.approved_virtual_date)):''}
+          ${o.rejected_virtual_date?inbCell('驳回日期',escTxt(o.rejected_virtual_date)):''}
+        </div>
+        <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
+          <div class="text-[11px] font-semibold text-slate-400 mb-1">Agent5 风险与入库</div>
+          ${a?inbCell('风险等级', lv||escTxt(a.risk_level||''))+inbCell('AI 分析', escTxt(a.summary||a.risk_analysis||''))+inbCell('推荐建议', escTxt(a.recommendation||''))
+             :'<div class="text-xs text-slate-400 mb-2">自动采购 / 无风险，无 Agent5 分析</div>'}
+          ${inbCell('入库状态', escTxt(o.inbound_status||'—'))}
+          ${o.inbound_virtual_date?inbCell('入库日期', escTxt(o.inbound_virtual_date)):''}
+        </div>
+      </div>`;
+    }
+    function renderInboundList(){
+      const list=document.getElementById('inbound-list');
+      const rows=filterInbound();
+      if(!rows.length){ list.innerHTML='<div class="text-center text-slate-400 text-sm py-10 bg-white border border-slate-200 rounded-2xl shadow-sm">暂无符合条件的采购订单。</div>'; return; }
+      list.innerHTML='';
+      rows.forEach(o=>{
+        const st=inbStatusMap[o.status]||['—','bg-slate-100 text-slate-500 border-slate-200'];
+        const card=document.createElement('div');
+        card.className='bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden';
+        card.innerHTML=`
+          <button onclick="toggleInbound(${o.order_id})" class="w-full text-left px-5 py-4 flex items-center justify-between flex-wrap gap-3 hover:bg-slate-50 transition">
+            <span class="flex items-center gap-3 flex-wrap">
+              <span class="font-mono text-sm text-slate-700">${escTxt(o.order_no)}</span>
+              <span class="text-xs font-medium text-slate-600">${inbSrcChip(o)}</span>
+              <span class="text-sm text-slate-700">${escTxt(o.ingredient||'—')}</span>
+            </span>
+            <span class="flex items-center gap-4 flex-wrap text-sm text-slate-600">
+              <span>${o.quantity??'—'} ${escTxt(o.unit||'kg')}</span>
+              <span>${escTxt(o.supplier_name||'—')}</span>
+              <span class="text-slate-500">¥${(+o.total_amount).toFixed(2)}</span>
+              <span class="text-xs px-2.5 py-1 rounded-full border font-medium ${st[1]}">${st[0]}</span>
+              <span class="text-xs text-slate-400">审核：${escTxt(o.reviewer_display??'-')}</span>
+            </span>
+          </button>
+          <div id="inb-detail-${o.order_id}" class="hidden px-5 pb-4">${inboundDetailHTML(o)}</div>`;
+        list.appendChild(card);
+      });
+    }
+    function toggleInbound(id){ const el=document.getElementById('inb-detail-'+id); if(el) el.classList.toggle('hidden'); }
     // 清空出库日志（清除历史/旧的错误日期残留）
     function clearStockOutLogs(){
       if(!confirm('确定要清空所有出库记录吗？')) return;
