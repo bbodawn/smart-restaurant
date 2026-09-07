@@ -45,6 +45,17 @@ def test_internal_fields_not_rendered_in_frontend():
     assert "risk_reason" not in html
 
 
+def test_phase8d_workbench_card_has_actions_and_ai_block():
+    """Phase 8-D：入库工作台卡片含审核按钮与 AI 风险分析块（ERP 审核页形态）。"""
+    html = INDEX.read_text(encoding="utf-8")
+    assert "批准采购" in html
+    assert "拒绝采购" in html
+    assert "AI 风险分析" in html
+    assert "AI 建议" in html
+    assert "该订单无需风险审核" in html
+    assert "inboundDecide(" in html      # 复用 decide 的包装入口
+
+
 def test_source_and_approval_labels_rendered():
     """Phase 6-D：采购方式/供应商/审批意见在订单卡可见（文案经 escTxt）。"""
     html = INDEX.read_text(encoding="utf-8")

@@ -999,21 +999,25 @@
         : '<tr class="border-t border-slate-100"><td colspan="7" class="px-4 py-10 text-center text-slate-400 text-sm">暂无出库记录，请在控制台快进天数生成</td></tr>';
     }
 
-    // ============= 入库管理（Phase 8）：采购订单生命周期视图 =============
+    // ============= 入库管理（Phase 8-D）：采购审核工作台（ERP 卡片）=============
     let _inbOrders = [];
     const inbStatusMap = {
       COMPLETED: ['已入库','bg-emerald-50 text-emerald-700 border-emerald-200'],
-      SUSPENDED: ['待审核','bg-amber-50 text-amber-700 border-amber-200'],
+      SUSPENDED: ['等待审核','bg-amber-50 text-amber-700 border-amber-200'],
       REJECTED:  ['已拒绝','bg-rose-50 text-rose-700 border-rose-200'],
       RUNNING:   ['处理中','bg-slate-100 text-slate-600 border-slate-200']
     };
-    function inbSrcChip(o){ return o.source==='AUTO'?'🤖 自动采购':(o.source==='MANUAL'?'👤 人工审批':(escTxt(o.source)||'—')); }
-    function inbCell(t, v){ return v?`<div class="text-xs text-slate-500 mb-0.5">${t}</div><div class="text-sm text-slate-800 mb-2">${v}</div>`:''; }
+    function inbSrcChip(o){ return o.source==='AUTO'?'🤖 自动采购':(o.source==='MANUAL'?'👤 人工采购':(escTxt(o.source)||'—')); }
+    function inbField(t, v){ return `<div><div class="text-[11px] text-slate-400">${t}</div><div class="text-sm text-slate-800">${v}</div></div>`; }
+    function riskLabelCN(lv){
+      const m={HIGH:'高风险',MEDIUM:'中风险',LOW:'低风险',UNKNOWN:'未知风险'};
+      return (m[lv]||escTxt(lv||''));
+    }
     async function renderInboundOrders(){
       try{
         _inbOrders = await api('/inbound/orders');
         renderInboundStats(); renderInboundList();
-      }catch(e){ showToast('入库管理加载失败：'+e.message); }
+      }catch(e){ showToast('入库工作台加载失败：'+e.message); }
     }
     function renderInboundStats(){
       const s={pending:0,auto:0,inbound:0,rejected:0};
@@ -1031,34 +1035,81 @@
       const st=document.getElementById('inb-status').value, sc=document.getElementById('inb-source').value;
       return _inbOrders.filter(o=> (!st||o.status===st) && (!sc||o.source===sc));
     }
-    function inboundDetailHTML(o){
-      const a = (o.agent5_analysis && typeof o.agent5_analysis==='object') ? o.agent5_analysis : null;
-      const lv = a && (riskLevelCN(a.risk_level) || escTxt(a.risk_level||''));
-      return `<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-        <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
-          <div class="text-[11px] font-semibold text-slate-400 mb-1">采购明细</div>
-          ${inbCell('食材 / 分类', escTxt(o.ingredient||'')+' · '+escTxt(o.category||'—'))}
-          ${inbCell('数量', (o.quantity??'—')+' '+escTxt(o.unit||'kg'))}
-          ${inbCell('单价', '¥'+(o.unit_price??'—'))}
-          ${inbCell('金额', '¥'+(+o.total_amount).toFixed(2))}
-        </div>
-        <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
-          <div class="text-[11px] font-semibold text-slate-400 mb-1">供应商与审核</div>
-          ${inbCell('供应商', escTxt(o.supplier_name||'—'))}
-          ${inbCell('报价', '¥'+(o.supplier_quote??'—'))}
-          ${inbCell('审核状态', escTxt(o.approval_status||'')+' · 审核人 '+escTxt(o.reviewer_display??'-'))}
-          ${o.approval_reason?inbCell('审批原因',escTxt(o.approval_reason)):''}
-          ${o.approved_virtual_date?inbCell('批准日期',escTxt(o.approved_virtual_date)):''}
-          ${o.rejected_virtual_date?inbCell('驳回日期',escTxt(o.rejected_virtual_date)):''}
-        </div>
-        <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
-          <div class="text-[11px] font-semibold text-slate-400 mb-1">Agent5 风险与入库</div>
-          ${a?inbCell('风险等级', lv||escTxt(a.risk_level||''))+inbCell('AI 分析', escTxt(a.summary||a.risk_analysis||''))+inbCell('推荐建议', escTxt(a.recommendation||''))
-             :'<div class="text-xs text-slate-400 mb-2">自动采购 / 无风险，无 Agent5 分析</div>'}
-          ${inbCell('入库状态', escTxt(o.inbound_status||'—'))}
-          ${o.inbound_virtual_date?inbCell('入库日期', escTxt(o.inbound_virtual_date)):''}
+    // 区域 A：采购详细信息
+    function inbDetailA(o){
+      return `<div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+        <div class="text-[11px] font-semibold text-slate-400 mb-2">A · 采购详细信息</div>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          ${inbField('采购订单号', escTxt(o.order_no))}
+          ${inbField('创建时间', escTxt(o.created_at||'—'))}
+          ${inbField('食材', escTxt(o.ingredient||'—'))}
+          ${inbField('分类', escTxt(o.category||'—'))}
+          ${inbField('采购数量', (o.quantity??'—')+' '+escTxt(o.unit||'kg'))}
+          ${inbField('单位', escTxt(o.unit||'kg'))}
+          ${inbField('供应商', escTxt(o.supplier_name||'—'))}
+          ${inbField('供应商报价', '¥'+(o.supplier_quote??'—'))}
+          ${inbField('采购单价', '¥'+(o.unit_price??'—'))}
+          ${inbField('采购金额', '¥'+(+o.total_amount).toFixed(2))}
         </div>
       </div>`;
+    }
+    // 区域 B：AI 风险分析（重点高亮）
+    function inbDetailB(o){
+      const a=(o.agent5_analysis&&typeof o.agent5_analysis==='object')?o.agent5_analysis:null;
+      if(!a){
+        return `<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+          <div class="text-[11px] font-semibold text-emerald-600 mb-1">B · AI 风险分析（Agent5）</div>
+          该订单无需风险审核。</div>`;
+      }
+      return `<div class="rounded-xl border border-rose-200 bg-rose-50 p-4">
+        <div class="text-[11px] font-semibold text-rose-500 mb-2">B · AI 风险分析（Agent5）</div>
+        <div class="grid md:grid-cols-2 gap-3 text-sm">
+          <div class="md:col-span-2 flex items-center gap-2">
+            <span class="text-xs text-slate-500">AI 风险：</span>
+            <span class="px-2 py-0.5 rounded-full border text-xs font-medium ${a.risk_level==='HIGH'?'bg-rose-600 text-white border-rose-600':(a.risk_level==='MEDIUM'?'bg-amber-500 text-white border-amber-500':'bg-slate-200 text-slate-700 border-slate-300')}">${riskLabelCN(a.risk_level)}</span>
+          </div>
+          <div><div class="text-xs text-slate-500">风险原因 / 摘要</div><div class="text-slate-800 leading-relaxed">${escTxt(a.summary||a.risk_analysis||'—')}</div></div>
+          <div><div class="text-xs text-slate-500">AI 分析</div><div class="text-slate-800 leading-relaxed">${escTxt(a.risk_analysis||'—')}</div></div>
+          <div class="md:col-span-2"><div class="text-xs text-slate-500">AI 建议</div><div class="text-slate-800 leading-relaxed">${escTxt(a.recommendation||'—')}</div></div>
+        </div>
+      </div>`;
+    }
+    // 区域 C：采购审核（交互）
+    function inbDetailC(o){
+      if(o.status==='SUSPENDED'){
+        return `<div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div class="text-[11px] font-semibold text-amber-600 mb-1">C · 采购审核</div>
+          <div class="text-sm text-slate-700 mb-3">审核状态：等待人工审核 · 审核人：-</div>
+          <div class="flex gap-2">
+            <button onclick="inboundDecide(${o.order_id},true)" class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-500 transition">批准采购</button>
+            <button onclick="inboundDecide(${o.order_id},false)" class="px-4 py-2 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-sm font-medium hover:bg-rose-100 transition">拒绝采购</button>
+          </div>
+        </div>`;
+      }
+      const reviewed = o.status==='COMPLETED'||o.status==='REJECTED';
+      return `<div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+        <div class="text-[11px] font-semibold text-slate-400 mb-2">C · 采购审核</div>
+        <div class="grid md:grid-cols-3 gap-3 text-sm">
+          ${inbField('审核状态', escTxt(o.approval_status||'—'))}
+          ${inbField('审核人', escTxt(o.reviewer_display??(o.status==='SUSPENDED'?'-':(reviewed?'—':'—'))))}
+          ${inbField('审核时间', escTxt(o.approved_virtual_date||o.rejected_virtual_date||'—'))}
+          ${o.approval_reason?inbField('审核意见', escTxt(o.approval_reason)):''}
+        </div>
+      </div>`;
+    }
+    // 区域 D：入库状态（派生）
+    function inbDetailD(o){
+      return `<div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+        <div class="text-[11px] font-semibold text-slate-400 mb-2">D · 入库状态</div>
+        <div class="grid md:grid-cols-3 gap-3 text-sm">
+          ${inbField('采购执行/入库状态', escTxt(o.inbound_status||'—'))}
+          ${inbField('入库时间', escTxt(o.inbound_virtual_date||'—'))}
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">AI 分析 → 风险判断 → 等待审核 → 人工批准/拒绝 → 执行采购 → 入库完成</div>
+      </div>`;
+    }
+    function inboundDetailHTML(o){
+      return `<div class="space-y-3">${inbDetailA(o)}${inbDetailB(o)}${inbDetailC(o)}${inbDetailD(o)}</div>`;
     }
     function renderInboundList(){
       const list=document.getElementById('inbound-list');
@@ -1070,25 +1121,36 @@
         const card=document.createElement('div');
         card.className='bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden';
         card.innerHTML=`
-          <button onclick="toggleInbound(${o.order_id})" class="w-full text-left px-5 py-4 flex items-center justify-between flex-wrap gap-3 hover:bg-slate-50 transition">
-            <span class="flex items-center gap-3 flex-wrap">
-              <span class="font-mono text-sm text-slate-700">${escTxt(o.order_no)}</span>
-              <span class="text-xs font-medium text-slate-600">${inbSrcChip(o)}</span>
-              <span class="text-sm text-slate-700">${escTxt(o.ingredient||'—')}</span>
-            </span>
-            <span class="flex items-center gap-4 flex-wrap text-sm text-slate-600">
-              <span>${o.quantity??'—'} ${escTxt(o.unit||'kg')}</span>
-              <span>${escTxt(o.supplier_name||'—')}</span>
-              <span class="text-slate-500">¥${(+o.total_amount).toFixed(2)}</span>
-              <span class="text-xs px-2.5 py-1 rounded-full border font-medium ${st[1]}">${st[0]}</span>
-              <span class="text-xs text-slate-400">审核：${escTxt(o.reviewer_display??'-')}</span>
-            </span>
+          <button onclick="toggleInbound(${o.order_id})" class="w-full text-left px-5 pt-4 pb-2 hover:bg-slate-50 transition">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <span class="flex items-center gap-3 flex-wrap">
+                <span class="font-mono text-sm text-slate-700">${escTxt(o.order_no)}</span>
+                <span class="text-xs font-medium text-slate-600">${inbSrcChip(o)}</span>
+                <span class="text-xs px-2.5 py-1 rounded-full border font-medium ${st[1]}">${st[0]}</span>
+              </span>
+              <span class="text-xs text-slate-400">点击查看详情 ▾</span>
+            </div>
           </button>
+          <div class="px-5 pb-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-sm">
+            ${inbField('采购食材', escTxt(o.ingredient||'—'))}
+            ${inbField('采购数量', (o.quantity??'—')+' '+escTxt(o.unit||'kg'))}
+            ${inbField('供应商', escTxt(o.supplier_name||'—'))}
+            ${inbField('采购单价', '¥'+(o.unit_price??'—'))}
+            ${inbField('采购金额', '¥'+(+o.total_amount).toFixed(2))}
+            ${inbField('审核状态', escTxt(o.approval_status||'—'))}
+          </div>
           <div id="inb-detail-${o.order_id}" class="hidden px-5 pb-4">${inboundDetailHTML(o)}</div>`;
         list.appendChild(card);
       });
     }
     function toggleInbound(id){ const el=document.getElementById('inb-detail-'+id); if(el) el.classList.toggle('hidden'); }
+    // 复用已有 decide()/api()：仅包裹，调用既有审批端点（approved true/false）
+    async function inboundDecide(orderId, approved){
+      try{
+        await decide(orderId, approved);   // decide 复用（同一审批端点，无重复逻辑）
+        await renderInboundOrders();
+      }catch(e){ showToast('操作失败：'+e.message); }
+    }
     // 清空出库日志（清除历史/旧的错误日期残留）
     function clearStockOutLogs(){
       if(!confirm('确定要清空所有出库记录吗？')) return;
