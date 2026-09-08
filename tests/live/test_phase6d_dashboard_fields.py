@@ -73,7 +73,7 @@ async def test_dashboard_auto_order_fields(_session_factory, graph, seed_ingredi
 
 # ---------- 人工审批(MANUAL) 订单：SUSPENDED → approve → 字段完整 ----------
 
-async def test_dashboard_review_manual_fields(db, seed_ingredient, dash_client, no_llm):
+async def test_dashboard_review_manual_fields(db, seed_ingredient, dash_client, no_llm, auth_headers):
     ing = await seed_ingredient(db, stock=10, daily=50, safety=30, price=32, hist=25)  # REVIEW
     key = "key-6d-" + uuid.uuid4().hex[:8]
     r = await dash_client.post("/api/v1/purchase", json={"ingredient": ing["name"]},
@@ -90,7 +90,8 @@ async def test_dashboard_review_manual_fields(db, seed_ingredient, dash_client, 
     assert isinstance(a5, dict) and a5["risk_level"] == "UNKNOWN"  # no_llm → canonical fallback
 
     ar = await dash_client.post(f"/api/v1/purchase/{oid}/approve",
-                                json={"approved": True, "approval_reason": "phase6d-ok"})
+                                json={"approved": True, "approval_reason": "phase6d-ok"},
+                                headers=auth_headers("purchaser"))
     assert ar.status_code == 200 and ar.json()["status"] == "COMPLETED"
 
     o2 = await _get_order(dash_client, oid)

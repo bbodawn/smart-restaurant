@@ -161,14 +161,15 @@ async def test_manual_concurrent_different_keys(_session_factory, seed_ingredien
 
 # ---------- 5. Manual REVIEW → approve ----------
 
-async def test_manual_review_approve(db, seed_ingredient, manual_client, _session_factory):
+async def test_manual_review_approve(db, seed_ingredient, manual_client, _session_factory, auth_headers):
     ing = await seed_ingredient(db, stock=10, daily=50, safety=30, price=32, hist=25)  # REVIEW
     r = await _post(manual_client, ing["name"], "key-rv-a-" + uuid.uuid4().hex[:6])
     assert r.status_code == 200 and r.json()["status"] == "SUSPENDED"
     oid = r.json()["order_id"]
 
     ar = await manual_client.post(f"/api/v1/purchase/{oid}/approve",
-                                  json={"approved": True, "approval_reason": "ok"})
+                                  json={"approved": True, "approval_reason": "ok"},
+                                  headers=auth_headers("purchaser"))
     assert ar.status_code == 200 and ar.json()["status"] == "COMPLETED"
 
     async with _session_factory() as s:
@@ -180,14 +181,15 @@ async def test_manual_review_approve(db, seed_ingredient, manual_client, _sessio
 
 # ---------- 6. Manual REVIEW → reject ----------
 
-async def test_manual_review_reject(db, seed_ingredient, manual_client, _session_factory):
+async def test_manual_review_reject(db, seed_ingredient, manual_client, _session_factory, auth_headers):
     ing = await seed_ingredient(db, stock=10, daily=50, safety=30, price=32, hist=25)
     r = await _post(manual_client, ing["name"], "key-rv-b-" + uuid.uuid4().hex[:6])
     oid = r.json()["order_id"]
     assert r.json()["status"] == "SUSPENDED"
 
     rr = await manual_client.post(f"/api/v1/purchase/{oid}/approve",
-                                  json={"approved": False, "approval_reason": "no"})
+                                  json={"approved": False, "approval_reason": "no"},
+                                  headers=auth_headers("purchaser"))
     assert rr.status_code == 200 and rr.json()["status"] == "REJECTED"
 
     async with _session_factory() as s:
@@ -199,13 +201,13 @@ async def test_manual_review_reject(db, seed_ingredient, manual_client, _session
 
 # ---------- 7. Duplicate approve：不重复入库 ----------
 
-async def test_manual_duplicate_approve(db, seed_ingredient, manual_client, _session_factory):
+async def test_manual_duplicate_approve(db, seed_ingredient, manual_client, _session_factory, auth_headers):
     ing = await seed_ingredient(db, stock=10, daily=50, safety=30, price=32, hist=25)
     r = await _post(manual_client, ing["name"], "key-dp-" + uuid.uuid4().hex[:6])
     oid = r.json()["order_id"]
 
-    a1 = await manual_client.post(f"/api/v1/purchase/{oid}/approve", json={"approved": True})
-    a2 = await manual_client.post(f"/api/v1/purchase/{oid}/approve", json={"approved": True})
+    a1 = await manual_client.post(f"/api/v1/purchase/{oid}/approve", json={"approved": True}, headers=auth_headers("purchaser"))
+    a2 = await manual_client.post(f"/api/v1/purchase/{oid}/approve", json={"approved": True}, headers=auth_headers("purchaser"))
     assert a1.json()["status"] == "COMPLETED" and a2.status_code == 200
     assert a2.json()["status"] == "COMPLETED" and "message" in a2.json()
 

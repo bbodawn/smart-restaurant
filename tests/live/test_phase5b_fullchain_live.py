@@ -63,7 +63,7 @@ def _seed_state(name, ing) -> dict:
     }
 
 
-async def test_phase5b_fullchain_live(_session_factory, counting_node, monkeypatch):
+async def test_phase5b_fullchain_live(_session_factory, counting_node, monkeypatch, auth_headers):
     """全链路：Seed→REVIEW→Agent5(真)→SUSPENDED→Checkpoint→Dashboard→approve→入库一次→幂等。"""
     import app.graph.workflow as wf
     from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -179,7 +179,8 @@ async def test_phase5b_fullchain_live(_session_factory, counting_node, monkeypat
                 # 注意：execute_inbound_stock 在另一会话 commit；验证必须用新会话读，
                 # 避免 MySQL REPEATABLE READ 下本会话旧快照读到未变库存（误判为缺陷）。
                 r2 = await client.post(f"/api/v1/purchase/{order_id}/approve",
-                                       json={"approved": True, "approval_reason": "phase5b"})
+                                       json={"approved": True, "approval_reason": "phase5b"},
+                                       headers=auth_headers("purchaser"))
                 assert r2.status_code == 200, r2.text[:300]
                 resp = r2.json()
                 assert resp["status"] == "COMPLETED"
@@ -214,7 +215,8 @@ async def test_phase5b_fullchain_live(_session_factory, counting_node, monkeypat
                 async with _session_factory() as chk:
                     stock_before_second = await _stock_of(chk, ing_id)
                 r3 = await client.post(f"/api/v1/purchase/{order_id}/approve",
-                                       json={"approved": True, "approval_reason": "phase5b-2"})
+                                       json={"approved": True, "approval_reason": "phase5b-2"},
+                                       headers=auth_headers("purchaser"))
                 assert r3.status_code == 200
                 assert r3.json()["status"] == "COMPLETED"
                 async with _session_factory() as chk:

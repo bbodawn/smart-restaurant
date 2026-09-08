@@ -88,14 +88,15 @@ async def test_review_suspended_fields(db, seed_ingredient, client, no_llm):
 
 # ---------- 3. approve 后 ----------
 
-async def test_approve_after_fields(db, seed_ingredient, client, no_llm):
+async def test_approve_after_fields(db, seed_ingredient, client, no_llm, auth_headers):
     ing = await seed_ingredient(db, stock=10, daily=50, safety=30, price=32, hist=25)
     key = "key-p8b-" + uuid.uuid4().hex[:6]
     r = await client.post("/api/v1/purchase", json={"ingredient": ing["name"]},
                           headers={"X-Idempotency-Key": key})
     oid = r.json()["order_id"]
     ar = await client.post(f"/api/v1/purchase/{oid}/approve",
-                           json={"approved": True, "approval_reason": "phase8-ok"})
+                           json={"approved": True, "approval_reason": "phase8-ok"},
+                           headers=auth_headers("purchaser"))
     assert ar.json()["status"] == "COMPLETED"
 
     d = (await client.get(f"/api/v1/inbound/orders/{oid}")).json()
@@ -109,14 +110,15 @@ async def test_approve_after_fields(db, seed_ingredient, client, no_llm):
 
 # ---------- 4. reject 后 ----------
 
-async def test_reject_after_fields(db, seed_ingredient, client, no_llm):
+async def test_reject_after_fields(db, seed_ingredient, client, no_llm, auth_headers):
     ing = await seed_ingredient(db, stock=10, daily=50, safety=30, price=32, hist=25)
     key = "key-p8c-" + uuid.uuid4().hex[:6]
     r = await client.post("/api/v1/purchase", json={"ingredient": ing["name"]},
                           headers={"X-Idempotency-Key": key})
     oid = r.json()["order_id"]
     rr = await client.post(f"/api/v1/purchase/{oid}/approve",
-                           json={"approved": False, "approval_reason": "phase8-no"})
+                           json={"approved": False, "approval_reason": "phase8-no"},
+                           headers=auth_headers("purchaser"))
     assert rr.json()["status"] == "REJECTED"
 
     d = (await client.get(f"/api/v1/inbound/orders/{oid}")).json()

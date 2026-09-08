@@ -19,6 +19,20 @@ def saver():
 
 
 @pytest.fixture
+def auth_headers():
+    """返回可调用 _auth(role='purchaser') -> {'Authorization': 'Bearer <token>'}。
+
+    直接签发 HMAC token（与 app.core.security 同源），供既有 HTTP 用例通过鉴权。
+    """
+    from app.core.security import create_token
+
+    def _h(role: str = "purchaser"):
+        return {"Authorization": "Bearer " + create_token(role, role)}
+
+    return _h
+
+
+@pytest.fixture
 def counting_node():
     """返回包装工厂，给每个节点加执行计数（同步/异步皆可）。
 

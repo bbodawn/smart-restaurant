@@ -21,6 +21,7 @@ from app.core.lock import (
     release_approval_lock,
     release_ingredient_lock,
 )
+from app.core.security import require_roles
 from app.graph.nodes import (
     deterministic_policy_node,
     inventory_analysis_node,
@@ -320,6 +321,7 @@ async def approve_purchase_order(
     request_body: ApproveRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
+    _auth: dict = Depends(require_roles(["manager", "purchaser"])),
 ):
     lock = await acquire_approval_lock(order_id)
     if lock is None:

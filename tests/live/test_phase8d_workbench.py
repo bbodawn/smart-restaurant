@@ -54,7 +54,7 @@ async def _new_suspended(_session_factory, seed_ingredient):
 
 
 # approve(true)：COMPLETED + 库存增加 + inbound 1
-async def test_workbench_approve(_session_factory, seed_ingredient, client, no_llm):
+async def test_workbench_approve(_session_factory, seed_ingredient, client, no_llm, auth_headers):
     ing = await _new_suspended(_session_factory, seed_ingredient)
     key = "w8d-a-" + uuid.uuid4().hex[:6]
     r = await client.post("/api/v1/purchase", json={"ingredient": ing["name"]},
@@ -65,7 +65,8 @@ async def test_workbench_approve(_session_factory, seed_ingredient, client, no_l
         before = await _stock(s, ing["ingredient_id"])
 
     ar = await client.post(f"/api/v1/purchase/{oid}/approve",
-                           json={"approved": True, "approval_reason": "工作台批准"})
+                           json={"approved": True, "approval_reason": "工作台批准"},
+                           headers=auth_headers("purchaser"))
     assert ar.status_code == 200 and ar.json()["status"] == "COMPLETED"
 
     async with _session_factory() as s:
@@ -77,7 +78,7 @@ async def test_workbench_approve(_session_factory, seed_ingredient, client, no_l
 
 
 # approve(false)：REJECTED + 库存不变 + 无 inbound
-async def test_workbench_reject(_session_factory, seed_ingredient, client, no_llm):
+async def test_workbench_reject(_session_factory, seed_ingredient, client, no_llm, auth_headers):
     ing = await _new_suspended(_session_factory, seed_ingredient)
     key = "w8d-r-" + uuid.uuid4().hex[:6]
     r = await client.post("/api/v1/purchase", json={"ingredient": ing["name"]},
@@ -87,7 +88,8 @@ async def test_workbench_reject(_session_factory, seed_ingredient, client, no_ll
         before = await _stock(s, ing["ingredient_id"])
 
     rr = await client.post(f"/api/v1/purchase/{oid}/approve",
-                           json={"approved": False, "approval_reason": "工作台驳回"})
+                           json={"approved": False, "approval_reason": "工作台驳回"},
+                           headers=auth_headers("purchaser"))
     assert rr.status_code == 200 and rr.json()["status"] == "REJECTED"
 
     async with _session_factory() as s:
