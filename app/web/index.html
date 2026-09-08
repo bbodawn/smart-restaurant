@@ -24,7 +24,7 @@
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
-  <div class="flex min-h-screen">
+  <div id="app-shell" class="flex min-h-screen">
     <!-- 侧边栏导航 -->
     <aside class="fixed top-0 left-0 bottom-0 h-screen w-60 shrink-0 z-50 overflow-y-auto bg-slate-800 text-slate-200 flex flex-col">
       <div class="px-5 py-4 flex items-center gap-2.5 border-b border-slate-700">
@@ -59,12 +59,26 @@
         <button data-view="agents" onclick="showView('agents')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
           <span>🤖</span><span>AI Agent 中心</span>
         </button>
+        <button data-view="order" onclick="showView('order')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition">
+          <span>🧾</span><span>点单</span>
+        </button>
       </nav>
-      <div class="mt-auto px-5 py-4 text-[10px] text-slate-500 border-t border-slate-700">Smart Restaurant v2</div>
+      <div id="user-chip" class="mt-auto px-5 py-4 text-[11px] text-slate-400 border-t border-slate-700"></div>
     </aside>
     <!-- 右侧内容区 -->
     <div class="ml-60 w-[calc(100%-15rem)] min-w-0 flex flex-col min-h-screen box-border">
   <!-- 顶部悬浮控制栏（控制台视图，由 #view-dashboard 包裹） -->
+  <div id="view-order" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
+    <div>
+      <h2 class="text-base font-semibold text-slate-800">点单</h2>
+      <p class="text-xs text-slate-400 mt-0.5">前台点单模块</p>
+    </div>
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm">点单功能开发中</div>
+  </div>
+  <div id="view-denied" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
+    <div class="bg-white border border-rose-200 rounded-2xl shadow-sm p-8 text-center text-rose-500 text-sm">当前角色无权限访问该页面</div>
+  </div>
+
   <div id="view-dashboard" class="flex flex-col">
   <header class="sticky top-0 z-20 backdrop-blur bg-white/80 border-b border-slate-200 shadow-sm">
     <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between flex-wrap gap-3">
@@ -278,13 +292,14 @@
   </div>
 
   <!-- 入库管理视图 -->
-  <div id="view-inbound" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
+  <div id="view-inbound" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-4">
     <div class="flex items-center justify-between flex-wrap gap-2">
       <div>
         <h2 class="text-base font-semibold text-slate-800">入库管理</h2>
-        <p class="text-xs text-slate-400 mt-0.5">采购订单生命周期 · 自动采购 / 人工审批 / 入库结果（业务执行视图）</p>
+        <p class="text-xs text-slate-400 mt-0.5">采购订单管理 · ERP 大表格视图</p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 flex-wrap">
+        <input type="date" id="inb-date" onchange="renderInboundOrders()" class="px-3 py-2 rounded-lg border border-slate-200 text-xs" />
         <select id="inb-status" onchange="renderInboundOrders()" class="px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white">
           <option value="">全部状态</option>
           <option value="RUNNING">处理中</option>
@@ -292,15 +307,47 @@
           <option value="COMPLETED">已完成</option>
           <option value="REJECTED">已拒绝</option>
         </select>
-        <select id="inb-source" onchange="renderInboundOrders()" class="px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white">
-          <option value="">全部来源</option>
-          <option value="AUTO">🤖 自动采购</option>
-          <option value="MANUAL">👤 人工审批</option>
+        <select id="inb-type" onchange="renderInboundOrders()" class="px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white">
+          <option value="">全部</option>
+          <option value="auto">🤖 自动审核</option>
+          <option value="manual">👤 人工审核</option>
         </select>
       </div>
     </div>
     <div id="inbound-stats" class="grid grid-cols-2 lg:grid-cols-4 gap-4"></div>
-    <div id="inbound-list" class="space-y-3"></div>
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-left text-xs text-slate-400 uppercase tracking-wide">
+            <tr>
+              <th class="px-4 py-3">订单号</th>
+              <th class="px-4 py-3">日期</th>
+              <th class="px-4 py-3">食材名</th>
+              <th class="px-4 py-3">食材价格</th>
+              <th class="px-4 py-3">采购数量</th>
+              <th class="px-4 py-3">采购总金额</th>
+              <th class="px-4 py-3">供应商</th>
+              <th class="px-4 py-3">审核状态</th>
+              <th class="px-4 py-3">详情</th>
+              <th class="px-4 py-3 text-right">审核操作</th>
+            </tr>
+          </thead>
+          <tbody id="inbound-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 详情弹窗 -->
+    <div id="inbound-modal" class="hidden fixed inset-0 z-50 items-center justify-center">
+      <div class="absolute inset-0 bg-slate-900/30" onclick="closeInboundModal()"></div>
+      <div class="relative bg-white w-full max-w-3xl mx-4 rounded-2xl shadow-2xl border border-slate-200 p-6 max-h-[85vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-sm font-semibold text-slate-800">采购订单详情</h3>
+          <button onclick="closeInboundModal()" class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500">✕</button>
+        </div>
+        <div id="inbound-modal-body"></div>
+      </div>
+    </div>
   </div>
 
   <!-- 合作供应商视图 -->
@@ -344,6 +391,20 @@
   </div><!-- /content -->
   </div><!-- /flex -->
 
+  <!-- 登录界面（Phase 9-B） -->
+  <div id="login-view" class="flex fixed inset-0 z-[200] items-center justify-center bg-slate-900/95">
+    <form onsubmit="event.preventDefault(); doLogin();" class="bg-white rounded-2xl shadow-2xl p-8 w-80 space-y-4">
+      <h2 class="text-lg font-semibold text-slate-800">智能餐饮经营分析与采购决策系统</h2>
+      <p class="text-xs text-slate-400">请登录（manager / purchaser / order_clerk，密码 123456）</p>
+      <div><label class="text-xs text-slate-500 block mb-1">用户名</label>
+        <input id="login-username" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm" autocomplete="username" /></div>
+      <div><label class="text-xs text-slate-500 block mb-1">密码</label>
+        <input id="login-password" type="password" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm" autocomplete="current-password" /></div>
+      <div id="login-error" class="hidden text-rose-500 text-xs">用户名或密码错误</div>
+      <button type="submit" class="w-full py-2 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 transition">登 录</button>
+    </form>
+  </div>
+
   <div id="toast" class="toast fixed top-20 left-1/2 -translate-x-1/2 px-5 py-3 rounded-xl bg-slate-800 text-white text-sm shadow-xl opacity-0 pointer-events-none z-50"></div>
 
   <script>
@@ -379,8 +440,72 @@
     };
 
     function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.style.opacity='1'; setTimeout(()=>t.style.opacity='0',2200); }
+    // ============= Phase 9-B 登录与角色权限 =============
+    const ROLE_PERMISSION = {
+      manager:     ['dashboard','inventory','daily-sales','price-reports','stock-out','inbound','suppliers','agents','order'],
+      purchaser:   ['dashboard','inventory','daily-sales','price-reports','stock-out','inbound','suppliers','agents'],
+      order_clerk: ['order']
+    };
+    const ROLE_CN = { manager:'主管', purchaser:'采购员', order_clerk:'点单员' };
+    function getAuthUser(){
+      try{ const a=JSON.parse(localStorage.getItem('auth')||'null'); return (a&&a.role)?{username:a.username,role:a.role}:null; }catch(e){ return null; }
+    }
+    function getAuthToken(){ try{ return (JSON.parse(localStorage.getItem('auth')||'null')||{}).token||null; }catch(e){ return null; } }
+    function isLoggedIn(){ return !!localStorage.getItem('auth') && !!getAuthUser(); }
+    function setShell(visible){ const el=document.getElementById('app-shell'); if(el) el.style.display = visible ? 'flex' : 'none'; }
+    function canView(role, view){ return Array.isArray(ROLE_PERMISSION[role]) && ROLE_PERMISSION[role].includes(view); }
+    function applyNavByRole(){
+      const role=(getAuthUser()||{}).role;
+      document.querySelectorAll('.nav-btn').forEach(b=>{
+        const v=b.dataset.view;
+        b.style.display = (role && canView(role,v)) ? '' : 'none';
+      });
+    }
+    function renderUserChip(){
+      const chip=document.getElementById('user-chip'); if(!chip) return;
+      const u=getAuthUser();
+      chip.innerHTML = u
+        ? `<div class="flex items-center gap-2 flex-wrap"><span class="text-[11px] text-slate-300">${escTxt(u.username)} (${escTxt(ROLE_CN[u.role]||u.role)})</span><button onclick="logout()" class="text-[10px] text-rose-300 underline hover:text-rose-200">退出登录</button></div>`
+        : `<div class="text-[11px] text-slate-400">未登录</div>`;
+    }
+    function showLogin(){ const l=document.getElementById('login-view'); if(l){ l.classList.remove('hidden'); l.classList.add('flex'); } }
+    function hideLogin(){ const l=document.getElementById('login-view'); if(l){ l.classList.add('hidden'); l.classList.remove('flex'); } }
+    function gotoDefaultView(){
+      const role=(getAuthUser()||{}).role;
+      const nav=ROLE_PERMISSION[role]||[];
+      const name=nav.includes('dashboard')?'dashboard':'order';
+      showView(name);
+      if(name==='dashboard') loadDashboard().catch(e=>showToast('加载失败：'+e.message));
+    }
+    async function doLogin(){
+      const username=(document.getElementById('login-username').value||'').trim();
+      const password=document.getElementById('login-password').value||'';
+      const err=document.getElementById('login-error');
+      if(!username||!password){ if(err){ err.textContent='请输入用户名和密码'; err.classList.remove('hidden'); } return; }
+      try{
+        const d=await api('/auth/login',{method:'POST',body:JSON.stringify({username,password})});
+        localStorage.setItem('auth', JSON.stringify({username:d.username,role:d.role,token:d.token}));
+        if(err){ err.classList.add('hidden'); }
+        setShell(true); hideLogin(); applyNavByRole(); renderUserChip(); gotoDefaultView();
+      }catch(e){
+        if(err){ err.textContent='用户名或密码错误'; err.classList.remove('hidden'); }
+      }
+    }
+    function logout(){
+      localStorage.removeItem('auth');
+      setShell(false); applyNavByRole(); renderUserChip(); showLogin();
+    }
+    function initAuth(){
+      if(isLoggedIn()){ setShell(true); hideLogin(); applyNavByRole(); renderUserChip(); gotoDefaultView(); }
+      else { setShell(false); applyNavByRole(); renderUserChip(); showLogin(); }
+    }
+    // 启动即鉴权（置于其它顶层逻辑之前执行）：未登录永远先见登录层
+    initAuth();
     async function api(path, opts={}){
-      const r = await fetch(API + path, Object.assign({ headers:{'Content-Type':'application/json'} }, opts));
+      const headers = Object.assign({ 'Content-Type':'application/json' }, (opts.headers||{}));
+      const token = getAuthToken();
+      if(token) headers['Authorization'] = 'Bearer ' + token;
+      const r = await fetch(API + path, Object.assign({ headers }, opts));
       if(!r.ok){ let m=r.status+' '+r.statusText; try{const j=await r.json(); m=j.detail||m;}catch(e){} throw new Error(m); }
       return r.json();
     }
@@ -711,10 +836,11 @@
     window.fetchDashboardData = loadDashboard;
     window.hideIngError = hideIngError;
 
-    loadDashboard().catch(e=>showToast('加载失败：'+e.message));
-
     // ================= 侧边栏视图切换与食材管理 =================
     function showView(name){
+      // 权限守卫（Phase 9-B）：已登录角色无权限时拦截
+      const _role=(getAuthUser()||{}).role;
+      if(_role && !canView(_role,name)){ showToast('当前角色无权限访问该页面'); return; }
       // 通用：遍历所有 nav-btn，切换对应 #view-{name} 容器的显示
       document.querySelectorAll('.nav-btn').forEach(b=>{
         const v = b.dataset.view;
@@ -999,152 +1125,149 @@
         : '<tr class="border-t border-slate-100"><td colspan="7" class="px-4 py-10 text-center text-slate-400 text-sm">暂无出库记录，请在控制台快进天数生成</td></tr>';
     }
 
-    // ============= 入库管理（Phase 8-D）：采购审核工作台（ERP 卡片）=============
+    // ============= 入库管理（Phase 8-E）：ERP 采购订单大表格 =============
     let _inbOrders = [];
-    const inbStatusMap = {
-      COMPLETED: ['已入库','bg-emerald-50 text-emerald-700 border-emerald-200'],
-      SUSPENDED: ['等待审核','bg-amber-50 text-amber-700 border-amber-200'],
-      REJECTED:  ['已拒绝','bg-rose-50 text-rose-700 border-rose-200'],
-      RUNNING:   ['处理中','bg-slate-100 text-slate-600 border-slate-200']
-    };
-    function inbSrcChip(o){ return o.source==='AUTO'?'🤖 自动采购':(o.source==='MANUAL'?'👤 人工采购':(escTxt(o.source)||'—')); }
-    function inbField(t, v){ return `<div><div class="text-[11px] text-slate-400">${t}</div><div class="text-sm text-slate-800">${v}</div></div>`; }
+    function inbDateOf(o){ return (o.created_at||'').slice(0,10); }
     function riskLabelCN(lv){
       const m={HIGH:'高风险',MEDIUM:'中风险',LOW:'低风险',UNKNOWN:'未知风险'};
       return (m[lv]||escTxt(lv||''));
     }
+    // 审核方式（派生）：auto=系统自动审核；manual=采购员人工审核；pending=待人工审核
+    // 注意：不使用 source（采购来源≠审核方式）；AUTO 来源也可能走人工审核。
+    function approvalType(o){
+      if(o.status==='SUSPENDED') return 'pending';
+      if(o.status==='REJECTED') return 'manual';
+      if(o.status==='COMPLETED'){
+        const r=(o.approval_reason||'').trim();
+        const systemAuto = o.source==='AUTO' && (!r || r.startsWith('system auto-approve'));
+        return systemAuto ? 'auto' : 'manual';
+      }
+      return o.source==='AUTO' ? 'auto' : 'manual';
+    }
+    // 审核角色（当前仅两类：系统自动 / 采购员）
+    function reviewState(o){
+      if(o.status==='SUSPENDED') return '待审核';
+      if(o.status==='COMPLETED'){
+        const r=(o.approval_reason||'').trim();
+        const auto = o.source==='AUTO' && (!r || r.startsWith('system auto-approve'));
+        return auto ? '自动' : '采购员';
+      }
+      if(o.status==='REJECTED') return '采购员';
+      return o.status||'—';
+    }
+    function reviewResultText(o){
+      if(o.status==='SUSPENDED') return '待审核';
+      if(o.status==='COMPLETED') return reviewState(o)==='自动' ? '自动完成' : '已同意';
+      if(o.status==='REJECTED') return '已驳回';
+      return o.status||'—';
+    }
+    // 审核状态列（审批结果）：待审核 / 同意 / 驳回
+    function approvalResultText(o){
+      if(o.status==='SUSPENDED') return '待审核';
+      if(o.status==='REJECTED') return '驳回';
+      return '同意'; // COMPLETED：auto 或 manual 均通过
+    }
+    // 审核操作列（操作人类型）：自动 / 采购员 / -
+    function approvalOperatorText(o){
+      if(o.status==='SUSPENDED') return '-';
+      return approvalType(o)==='auto' ? '自动' : '采购员';
+    }
+    function operatorLabel(o){
+      if(o.status==='SUSPENDED') return '-';
+      return reviewState(o)==='自动' ? '系统自动' : '采购员';
+    }
+    function inbField(t, v){ return `<div><div class="text-[11px] text-slate-400">${t}</div><div class="text-sm text-slate-800">${v}</div></div>`; }
     async function renderInboundOrders(){
       try{
         _inbOrders = await api('/inbound/orders');
-        renderInboundStats(); renderInboundList();
-      }catch(e){ showToast('入库工作台加载失败：'+e.message); }
+        renderInboundStats(); renderInboundTable();
+      }catch(e){ showToast('入库管理加载失败：'+e.message); }
     }
     function renderInboundStats(){
       const s={pending:0,auto:0,inbound:0,rejected:0};
       _inbOrders.forEach(o=>{
         if(o.status==='SUSPENDED') s.pending++;
-        if(o.source==='AUTO') s.auto++;
+        if(approvalType(o)==='auto') s.auto++;   // 按审核方式统计，非 source
         if(o.inbound_status==='已入库') s.inbound++;
         if(o.status==='REJECTED') s.rejected++;
       });
-      const cards=[['待审核订单',s.pending],['自动采购',s.auto],['已入库',s.inbound],['已拒绝',s.rejected]];
+      const cards=[['待审核订单',s.pending],['自动审核',s.auto],['已入库',s.inbound],['已拒绝',s.rejected]];
       document.getElementById('inbound-stats').innerHTML = cards.map(([k,v])=>
-        `<div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5"><div class="text-xs text-slate-400 mb-1">${k}</div><div class="font-semibold text-2xl tabular-nums text-slate-800">${v}</div></div>`).join('');
+        `<div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4"><div class="text-xs text-slate-400 mb-1">${k}</div><div class="font-semibold text-2xl tabular-nums text-slate-800">${v}</div></div>`).join('');
     }
     function filterInbound(){
-      const st=document.getElementById('inb-status').value, sc=document.getElementById('inb-source').value;
-      return _inbOrders.filter(o=> (!st||o.status===st) && (!sc||o.source===sc));
-    }
-    // 区域 A：采购详细信息
-    function inbDetailA(o){
-      return `<div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
-        <div class="text-[11px] font-semibold text-slate-400 mb-2">A · 采购详细信息</div>
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          ${inbField('采购订单号', escTxt(o.order_no))}
-          ${inbField('创建时间', escTxt(o.created_at||'—'))}
-          ${inbField('食材', escTxt(o.ingredient||'—'))}
-          ${inbField('分类', escTxt(o.category||'—'))}
-          ${inbField('采购数量', (o.quantity??'—')+' '+escTxt(o.unit||'kg'))}
-          ${inbField('单位', escTxt(o.unit||'kg'))}
-          ${inbField('供应商', escTxt(o.supplier_name||'—'))}
-          ${inbField('供应商报价', '¥'+(o.supplier_quote??'—'))}
-          ${inbField('采购单价', '¥'+(o.unit_price??'—'))}
-          ${inbField('采购金额', '¥'+(+o.total_amount).toFixed(2))}
-        </div>
-      </div>`;
-    }
-    // 区域 B：AI 风险分析（重点高亮）
-    function inbDetailB(o){
-      const a=(o.agent5_analysis&&typeof o.agent5_analysis==='object')?o.agent5_analysis:null;
-      if(!a){
-        return `<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-          <div class="text-[11px] font-semibold text-emerald-600 mb-1">B · AI 风险分析（Agent5）</div>
-          该订单无需风险审核。</div>`;
-      }
-      return `<div class="rounded-xl border border-rose-200 bg-rose-50 p-4">
-        <div class="text-[11px] font-semibold text-rose-500 mb-2">B · AI 风险分析（Agent5）</div>
-        <div class="grid md:grid-cols-2 gap-3 text-sm">
-          <div class="md:col-span-2 flex items-center gap-2">
-            <span class="text-xs text-slate-500">AI 风险：</span>
-            <span class="px-2 py-0.5 rounded-full border text-xs font-medium ${a.risk_level==='HIGH'?'bg-rose-600 text-white border-rose-600':(a.risk_level==='MEDIUM'?'bg-amber-500 text-white border-amber-500':'bg-slate-200 text-slate-700 border-slate-300')}">${riskLabelCN(a.risk_level)}</span>
-          </div>
-          <div><div class="text-xs text-slate-500">风险原因 / 摘要</div><div class="text-slate-800 leading-relaxed">${escTxt(a.summary||a.risk_analysis||'—')}</div></div>
-          <div><div class="text-xs text-slate-500">AI 分析</div><div class="text-slate-800 leading-relaxed">${escTxt(a.risk_analysis||'—')}</div></div>
-          <div class="md:col-span-2"><div class="text-xs text-slate-500">AI 建议</div><div class="text-slate-800 leading-relaxed">${escTxt(a.recommendation||'—')}</div></div>
-        </div>
-      </div>`;
-    }
-    // 区域 C：采购审核（交互）
-    function inbDetailC(o){
-      if(o.status==='SUSPENDED'){
-        return `<div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <div class="text-[11px] font-semibold text-amber-600 mb-1">C · 采购审核</div>
-          <div class="text-sm text-slate-700 mb-3">审核状态：等待人工审核 · 审核人：-</div>
-          <div class="flex gap-2">
-            <button onclick="inboundDecide(${o.order_id},true)" class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-500 transition">批准采购</button>
-            <button onclick="inboundDecide(${o.order_id},false)" class="px-4 py-2 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-sm font-medium hover:bg-rose-100 transition">拒绝采购</button>
-          </div>
-        </div>`;
-      }
-      const reviewed = o.status==='COMPLETED'||o.status==='REJECTED';
-      return `<div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
-        <div class="text-[11px] font-semibold text-slate-400 mb-2">C · 采购审核</div>
-        <div class="grid md:grid-cols-3 gap-3 text-sm">
-          ${inbField('审核状态', escTxt(o.approval_status||'—'))}
-          ${inbField('审核人', escTxt(o.reviewer_display??(o.status==='SUSPENDED'?'-':(reviewed?'—':'—'))))}
-          ${inbField('审核时间', escTxt(o.approved_virtual_date||o.rejected_virtual_date||'—'))}
-          ${o.approval_reason?inbField('审核意见', escTxt(o.approval_reason)):''}
-        </div>
-      </div>`;
-    }
-    // 区域 D：入库状态（派生）
-    function inbDetailD(o){
-      return `<div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
-        <div class="text-[11px] font-semibold text-slate-400 mb-2">D · 入库状态</div>
-        <div class="grid md:grid-cols-3 gap-3 text-sm">
-          ${inbField('采购执行/入库状态', escTxt(o.inbound_status||'—'))}
-          ${inbField('入库时间', escTxt(o.inbound_virtual_date||'—'))}
-        </div>
-        <div class="text-[11px] text-slate-400 mt-2">AI 分析 → 风险判断 → 等待审核 → 人工批准/拒绝 → 执行采购 → 入库完成</div>
-      </div>`;
-    }
-    function inboundDetailHTML(o){
-      return `<div class="space-y-3">${inbDetailA(o)}${inbDetailB(o)}${inbDetailC(o)}${inbDetailD(o)}</div>`;
-    }
-    function renderInboundList(){
-      const list=document.getElementById('inbound-list');
-      const rows=filterInbound();
-      if(!rows.length){ list.innerHTML='<div class="text-center text-slate-400 text-sm py-10 bg-white border border-slate-200 rounded-2xl shadow-sm">暂无符合条件的采购订单。</div>'; return; }
-      list.innerHTML='';
-      rows.forEach(o=>{
-        const st=inbStatusMap[o.status]||['—','bg-slate-100 text-slate-500 border-slate-200'];
-        const card=document.createElement('div');
-        card.className='bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden';
-        card.innerHTML=`
-          <button onclick="toggleInbound(${o.order_id})" class="w-full text-left px-5 pt-4 pb-2 hover:bg-slate-50 transition">
-            <div class="flex items-center justify-between flex-wrap gap-2">
-              <span class="flex items-center gap-3 flex-wrap">
-                <span class="font-mono text-sm text-slate-700">${escTxt(o.order_no)}</span>
-                <span class="text-xs font-medium text-slate-600">${inbSrcChip(o)}</span>
-                <span class="text-xs px-2.5 py-1 rounded-full border font-medium ${st[1]}">${st[0]}</span>
-              </span>
-              <span class="text-xs text-slate-400">点击查看详情 ▾</span>
-            </div>
-          </button>
-          <div class="px-5 pb-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-sm">
-            ${inbField('采购食材', escTxt(o.ingredient||'—'))}
-            ${inbField('采购数量', (o.quantity??'—')+' '+escTxt(o.unit||'kg'))}
-            ${inbField('供应商', escTxt(o.supplier_name||'—'))}
-            ${inbField('采购单价', '¥'+(o.unit_price??'—'))}
-            ${inbField('采购金额', '¥'+(+o.total_amount).toFixed(2))}
-            ${inbField('审核状态', escTxt(o.approval_status||'—'))}
-          </div>
-          <div id="inb-detail-${o.order_id}" class="hidden px-5 pb-4">${inboundDetailHTML(o)}</div>`;
-        list.appendChild(card);
+      const dt=document.getElementById('inb-date').value;
+      const st=document.getElementById('inb-status').value;
+      const ty=document.getElementById('inb-type').value;
+      return _inbOrders.filter(o=>{
+        const type=approvalType(o);
+        if(dt && inbDateOf(o)!==dt) return false;
+        if(st && o.status!==st) return false;
+        if(ty==='auto' && type!=='auto') return false;
+        if(ty==='manual' && !(type==='manual'||type==='pending')) return false;
+        return true;
       });
     }
-    function toggleInbound(id){ const el=document.getElementById('inb-detail-'+id); if(el) el.classList.toggle('hidden'); }
-    // 复用已有 decide()/api()：仅包裹，调用既有审批端点（approved true/false）
+    function renderInboundTable(){
+      const tbody=document.getElementById('inbound-tbody');
+      const rows=filterInbound();
+      if(!rows.length){ tbody.innerHTML='<tr><td colspan="10" class="px-4 py-10 text-center text-slate-400 text-sm">暂无符合条件的采购订单。</td></tr>'; return; }
+      tbody.innerHTML=rows.map(o=>`
+        <tr class="border-t border-slate-100 hover:bg-slate-50">
+          <td class="px-4 py-3 font-mono text-xs text-slate-700">${escTxt(o.order_no)}</td>
+          <td class="px-4 py-3 tabular-nums text-xs text-slate-500">${inbDateOf(o)||'—'}</td>
+          <td class="px-4 py-3 text-slate-800">${escTxt(o.ingredient||'—')}</td>
+          <td class="px-4 py-3 tabular-nums">${o.unit_price!=null?'¥'+o.unit_price:'—'}</td>
+          <td class="px-4 py-3 tabular-nums">${(o.quantity??'—')+' '+escTxt(o.unit||'kg')}</td>
+          <td class="px-4 py-3 tabular-nums">¥${(+o.total_amount).toFixed(2)}</td>
+          <td class="px-4 py-3">${escTxt(o.supplier_name||'—')}</td>
+          <td class="px-4 py-3">${escTxt(approvalResultText(o))}</td>
+          <td class="px-4 py-3"><button onclick="openInboundDetail(${o.order_id})" class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs hover:bg-slate-200 transition">详情</button></td>
+          <td class="px-4 py-3 text-right whitespace-nowrap">
+            ${o.status==='SUSPENDED'
+              ? `<button onclick="inboundDecide(${o.order_id},true)" class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-xs hover:bg-emerald-500 transition">同意</button>
+                 <button onclick="inboundDecide(${o.order_id},false)" class="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-xs hover:bg-rose-100 transition ml-1">驳回</button>`
+              : `<span class="text-xs text-slate-400">${escTxt(approvalOperatorText(o))}</span>`}
+          </td>
+        </tr>`).join('');
+    }
+    function inboundDetailBody(o){
+      const a=(o.agent5_analysis&&typeof o.agent5_analysis==='object')?o.agent5_analysis:null;
+      const g=(t,v)=> v?`<div class="grid grid-cols-2 md:grid-cols-4 gap-3">${inbField('采购订单号',escTxt(o.order_no))}${inbField('创建时间',escTxt(o.created_at||'—'))}${inbField('食材',escTxt(o.ingredient||'—'))}${inbField('分类',escTxt(o.category||'—'))}${inbField('数量',(o.quantity??'—')+' '+escTxt(o.unit||'kg'))}${inbField('采购单价','¥'+(o.unit_price??'—'))}${inbField('采购金额','¥'+(+o.total_amount).toFixed(2))}${inbField('供应商',escTxt(o.supplier_name||'—'))}${inbField('供应商报价','¥'+(o.supplier_quote??'—'))}</div>`:'';
+      const ai = a ? `<div class="rounded-xl border border-rose-200 bg-rose-50 p-4">
+          <div class="text-xs font-semibold text-rose-500 mb-2">Agent5 风险分析</div>
+          <div class="flex items-center gap-2 mb-2"><span class="text-xs text-slate-500">风险等级：</span><span class="px-2 py-0.5 rounded-full border text-xs font-medium ${a.risk_level==='HIGH'?'bg-rose-600 text-white border-rose-600':(a.risk_level==='MEDIUM'?'bg-amber-500 text-white border-amber-500':'bg-slate-200 text-slate-700 border-slate-300')}">${riskLabelCN(a.risk_level)}</span></div>
+          <div class="grid md:grid-cols-2 gap-3 text-sm">
+            <div><div class="text-xs text-slate-500">风险原因</div><div class="text-slate-800">${escTxt(a.summary||a.risk_analysis||'—')}</div></div>
+            <div><div class="text-xs text-slate-500">Agent 分析</div><div class="text-slate-800">${escTxt(a.risk_analysis||'—')}</div></div>
+            <div class="md:col-span-2"><div class="text-xs text-slate-500">AI 建议</div><div class="text-slate-800">${escTxt(a.recommendation||'—')}</div></div>
+          </div>
+        </div>` : `<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">该订单无需风险审核。</div>`;
+      const review = `<div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+          <div class="text-xs font-semibold text-slate-400 mb-2">审核信息</div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            ${inbField('审核状态',escTxt(approvalResultText(o)))}
+            ${inbField('操作人',escTxt(operatorLabel(o)))}
+            ${inbField('审批意见',escTxt(o.approval_reason||'—'))}
+            ${inbField('同意时间',escTxt(o.approved_virtual_date||'—'))}
+            ${inbField('驳回时间',escTxt(o.rejected_virtual_date||'—'))}
+            ${inbField('入库状态',escTxt(o.inbound_status||'—'))}
+          </div>
+        </div>`;
+      return `<div class="space-y-4 text-sm">
+        <section><div class="text-xs font-semibold text-slate-400 mb-1">基础采购信息</div>${g()}</section>
+        <section>${ai}</section>
+        <section>${review}</section>
+      </div>`;
+    }
+    function openInboundDetail(orderId){
+      const o=_inbOrders.find(x=>x.order_id===orderId); if(!o) return;
+      document.getElementById('inbound-modal-body').innerHTML=inboundDetailBody(o);
+      const m=document.getElementById('inbound-modal');
+      m.classList.remove('hidden'); m.classList.add('flex');
+    }
+    function closeInboundModal(){ const m=document.getElementById('inbound-modal'); if(m){ m.classList.add('hidden'); m.classList.remove('flex'); } }
+    // 复用已有 decide()/api()：调用既有审批端点（approved true/false）
     async function inboundDecide(orderId, approved){
       try{
         await decide(orderId, approved);   // decide 复用（同一审批端点，无重复逻辑）

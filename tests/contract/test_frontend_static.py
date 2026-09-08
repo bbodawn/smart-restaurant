@@ -45,15 +45,29 @@ def test_internal_fields_not_rendered_in_frontend():
     assert "risk_reason" not in html
 
 
-def test_phase8d_workbench_card_has_actions_and_ai_block():
-    """Phase 8-D：入库工作台卡片含审核按钮与 AI 风险分析块（ERP 审核页形态）。"""
+def test_phase8e_erp_table_has_columns_and_actions():
+    """Phase 8-E：入库管理为 ERP 大表格（列头/审核操作/详情弹窗/AI 分析）。"""
     html = INDEX.read_text(encoding="utf-8")
-    assert "批准采购" in html
-    assert "拒绝采购" in html
-    assert "AI 风险分析" in html
-    assert "AI 建议" in html
+    # 表头列
+    for col in ["订单号", "日期", "食材名", "食材价格", "采购数量", "采购总金额",
+                "供应商", "审核状态", "详情", "审核操作"]:
+        assert col in html, f"缺表头列 {col}"
+    assert "inbound-tbody" in html
+    assert "同意" in html and "驳回" in html       # SUSPENDED 审核操作按钮
+    assert "Agent5 风险分析" in html and "AI 建议" in html
     assert "该订单无需风险审核" in html
-    assert "inboundDecide(" in html      # 复用 decide 的包装入口
+    assert "inboundDecide(" in html               # 复用 decide 的包装入口
+    assert "openInboundDetail(" in html and "inbound-modal" in html  # 详情弹窗
+
+
+def test_phase9b_login_and_rbac_present():
+    """Phase 9-B：登录视图/退出/角色权限/Authorization/角色中文映射存在。"""
+    html = INDEX.read_text(encoding="utf-8")
+    for tok in ["login-view", "logout", "ROLE_PERMISSION", "canView", "ROLE_CN",
+                "'Bearer ' + token", "点单功能开发中", "当前角色无权限访问该页面",
+                "order_clerk"]:
+        assert tok in html, f"missing {tok}"
+    assert "主管" in html and "采购员" in html and "点单员" in html
 
 
 def test_source_and_approval_labels_rendered():
