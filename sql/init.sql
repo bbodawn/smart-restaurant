@@ -6,6 +6,11 @@ USE restaurant;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS sales_order_items;
+DROP TABLE IF EXISTS dish_bom;
+DROP TABLE IF EXISTS sales_orders;
+DROP TABLE IF EXISTS dishes;
+DROP TABLE IF EXISTS stock_movements;
 DROP TABLE IF EXISTS inbound_records;
 DROP TABLE IF EXISTS purchase_order_items;
 DROP TABLE IF EXISTS purchase_orders;
@@ -139,6 +144,96 @@ CREATE TABLE inbound_records (
     INDEX idx_inbound_ingredient (ingredient_id)
 ) ENGINE=InnoDB;
 
+-- 统一库存流水（Phase 10）：入/出库唯一事实记录，change_qty 正入负出，
+-- balance_after 为该笔后的库存快照；movement_type 表达库存变化原因，
+-- reference_type+reference_id 指向触发事件（SALES_ORDER / PURCHASE_ORDER）。
+CREATE TABLE stock_movements (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    ingredient_id BIGINT NOT NULL,
+    change_qty DECIMAL(12,4) NOT NULL,
+    balance_after DECIMAL(12,4) NOT NULL,
+    movement_type VARCHAR(24) NOT NULL COMMENT 'INBOUND / ORDER_SALE / SIMULATION_SALE / MANUAL_ADJUST',
+    reference_type VARCHAR(24) NOT NULL COMMENT 'SALES_ORDER / PURCHASE_ORDER',
+    reference_id BIGINT NOT NULL COMMENT '指向 reference_type 对应记录 id',
+    virtual_date DATE NOT NULL,
+    note VARCHAR(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_movement_ingredient
+        FOREIGN KEY (ingredient_id) REFERENCES ingredients(id),
+
+    INDEX idx_movement_type (movement_type),
+    INDEX idx_movement_ing_date (ingredient_id, virtual_date)
+) ENGINE=InnoDB;
+
+-- 菜品主数据（Phase 10）：售价 + 冷启动模拟销量基数；BOM 只引用 ingredients
+CREATE TABLE dishes (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    category VARCHAR(50) NULL,
+    price DECIMAL(12,2) NOT NULL,
+    simulation_daily_qty INT NOT NULL DEFAULT 10 COMMENT 'SIMULATION_SALE 冷启动每日模拟销量',
+    available TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- 菜品 BOM：dish × ingredient，qty_per_serving 按食材自身单位（kg/L），每 1 份用量
+CREATE TABLE dish_bom (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    dish_id BIGINT NOT NULL,
+    ingredient_id BIGINT NOT NULL,
+    qty_per_serving DECIMAL(12,4) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_bom_dish
+        FOREIGN KEY (dish_id) REFERENCES dishes(id),
+    CONSTRAINT fk_bom_ingredient
+        FOREIGN KEY (ingredient_id) REFERENCES ingredients(id),
+
+    CONSTRAINT uq_bom_dish_ing UNIQUE (dish_id, ingredient_id),
+    CONSTRAINT chk_bom_qty CHECK (qty_per_serving > 0),
+
+    INDEX idx_bom_dish (dish_id)
+) ENGINE=InnoDB;
+
+-- 销售订单头（Phase 10）：ORDER_SALE 真实点单 / SIMULATION_SALE 快进模拟，即时成交 COMPLETED
+CREATE TABLE sales_orders (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    order_no VARCHAR(64) NOT NULL UNIQUE,
+    order_type VARCHAR(30) NOT NULL COMMENT 'ORDER_SALE / SIMULATION_SALE',
+    status VARCHAR(20) NOT NULL DEFAULT 'COMPLETED',
+    total_amount DECIMAL(12,2) NOT NULL,
+    virtual_date DATE NOT NULL,
+    created_by VARCHAR(50) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_so_order_type CHECK (order_type IN ('ORDER_SALE','SIMULATION_SALE')),
+
+    INDEX idx_sales_order_type (order_type),
+    INDEX idx_sales_order_date (virtual_date)
+) ENGINE=InnoDB;
+
+-- 销售订单明细（菜品级；unit_price 售价快照，防历史漂移）
+CREATE TABLE sales_order_items (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    order_id BIGINT NOT NULL,
+    dish_id BIGINT NOT NULL,
+    qty INT NOT NULL,
+    unit_price DECIMAL(12,2) NOT NULL,
+    subtotal DECIMAL(12,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_soi_order
+        FOREIGN KEY (order_id) REFERENCES sales_orders(id),
+    CONSTRAINT fk_soi_dish
+        FOREIGN KEY (dish_id) REFERENCES dishes(id),
+
+    CONSTRAINT uq_soi_order_dish UNIQUE (order_id, dish_id),
+    CONSTRAINT chk_soi_qty CHECK (qty > 0),
+
+    INDEX idx_soi_order (order_id)
+) ENGINE=InnoDB;
+
 -- ============ Day 4 种子数据：10 种典型餐饮食材 ============
 INSERT INTO ingredients (name, unit, category)
 VALUES
@@ -180,3 +275,25 @@ VALUES
 ('高原薯业', 8, 4.00, 3.80, 4.50),
 ('中粮油脂', 9, 12.00, 11.50, 4.90),
 ('粤珍调味', 10, 15.00, 14.50, 4.70);
+
+-- ============ Phase 10 种子菜品：6 道（BOM 只引用以上 10 种食材） ============
+INSERT INTO dishes (name, category, price, simulation_daily_qty) VALUES
+('土豆炖牛肉', '热菜', 38.00, 20),
+('白灼基围虾', '热菜', 48.00, 12),
+('清炒有机菜心', '素菜', 12.00, 15),
+('东北米饭', '主食', 3.00, 40),
+('香煎鸡胸肉', '热菜', 22.00, 18),
+('京葱炒肉', '热菜', 32.00, 16);
+
+-- BOM（每 1 份用量，单位跟随食材：kg / L）
+INSERT INTO dish_bom (dish_id, ingredient_id, qty_per_serving) VALUES
+((SELECT id FROM dishes WHERE name='土豆炖牛肉'),  (SELECT id FROM ingredients WHERE name='原切雪花牛肉'), 0.15),
+((SELECT id FROM dishes WHERE name='土豆炖牛肉'),  (SELECT id FROM ingredients WHERE name='高山土豆'),     0.20),
+((SELECT id FROM dishes WHERE name='白灼基围虾'),  (SELECT id FROM ingredients WHERE name='冰鲜基围虾'),   0.25),
+((SELECT id FROM dishes WHERE name='清炒有机菜心'),(SELECT id FROM ingredients WHERE name='有机菜心'),     0.30),
+((SELECT id FROM dishes WHERE name='清炒有机菜心'),(SELECT id FROM ingredients WHERE name='非转基因大豆油'), 0.02),
+((SELECT id FROM dishes WHERE name='东北米饭'),    (SELECT id FROM ingredients WHERE name='东北大米'),     0.20),
+((SELECT id FROM dishes WHERE name='香煎鸡胸肉'),  (SELECT id FROM ingredients WHERE name='鲜嫩鸡胸肉'),   0.20),
+((SELECT id FROM dishes WHERE name='香煎鸡胸肉'),  (SELECT id FROM ingredients WHERE name='非转基因大豆油'), 0.02),
+((SELECT id FROM dishes WHERE name='京葱炒肉'),    (SELECT id FROM ingredients WHERE name='优质猪肉'),     0.20),
+((SELECT id FROM dishes WHERE name='京葱炒肉'),    (SELECT id FROM ingredients WHERE name='招牌特调酱油'), 0.02);

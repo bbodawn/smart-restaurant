@@ -12,6 +12,7 @@ from app.api.inbound import router as inbound_router
 from app.api.ingredients import router as ingredients_router
 from app.api.intent import router as intent_router
 from app.api.purchase import router as purchase_router
+from app.api.sales import router as sales_router
 from app.api.test_time import router as test_time_router
 from app.core.db import close_db
 from app.core.redis import close_redis, ping_redis
@@ -47,6 +48,7 @@ app.include_router(inbound_router, prefix="/api/v1")
 app.include_router(intent_router, prefix="/api/v1")
 app.include_router(test_time_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
+app.include_router(sales_router, prefix="/api/v1")
 app.include_router(ingredients_router, prefix="/api/v1")
 
 # 托管本地静态资源（Tailwind 本地化，避免外部 CDN 依赖）

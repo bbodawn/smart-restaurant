@@ -69,11 +69,92 @@
     <div class="ml-60 w-[calc(100%-15rem)] min-w-0 flex flex-col min-h-screen box-border">
   <!-- 顶部悬浮控制栏（控制台视图，由 #view-dashboard 包裹） -->
   <div id="view-order" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
-    <div>
-      <h2 class="text-base font-semibold text-slate-800">点单</h2>
-      <p class="text-xs text-slate-400 mt-0.5">前台点单模块</p>
+    <div class="flex items-center justify-between flex-wrap gap-2">
+      <div>
+        <h2 class="text-base font-semibold text-slate-800">前台点单</h2>
+        <p class="text-xs text-slate-400 mt-0.5">选桌号 → 点菜 → 核对 → 提交（BOM 联动即时扣减库存）</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs text-slate-500">虚拟营业日 <b id="order-virtual-date" class="text-slate-800">—</b></span>
+        <button onclick="loadOrderPage()" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs hover:bg-slate-200 transition">刷新</button>
+      </div>
     </div>
-    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm">点单功能开发中</div>
+
+    <!-- 步骤1：选择桌号（未选桌时显示，选桌后进入点菜） -->
+    <div id="order-step-table">
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+        <div class="text-sm font-semibold text-slate-800 mb-1">请选择桌号</div>
+        <p class="text-xs text-slate-400 mb-4">选择后进入点菜；未选桌号前不可下单。</p>
+        <div class="flex flex-wrap gap-2" id="table-chip-list">
+          <button data-table="1号桌" onclick="selectTable('1号桌')" class="table-chip px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:border-emerald-300 hover:text-emerald-700 transition">1号桌</button>
+          <button data-table="2号桌" onclick="selectTable('2号桌')" class="table-chip px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:border-emerald-300 hover:text-emerald-700 transition">2号桌</button>
+          <button data-table="3号桌" onclick="selectTable('3号桌')" class="table-chip px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:border-emerald-300 hover:text-emerald-700 transition">3号桌</button>
+          <button data-table="包间A" onclick="selectTable('包间A')" class="table-chip px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:border-emerald-300 hover:text-emerald-700 transition">包间A</button>
+          <button data-table="包间B" onclick="selectTable('包间B')" class="table-chip px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:border-emerald-300 hover:text-emerald-700 transition">包间B</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 点菜主区：左 菜单，右 本次点单（选桌后显示） -->
+    <div id="order-step-menu" class="hidden flex-col space-y-5">
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-700">桌号：<b id="order-table-name">—</b></div>
+        <button onclick="backToSelectTable()" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs hover:bg-slate-200 transition">更换桌号</button>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+        <!-- 菜品菜单 -->
+        <div class="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100">菜品菜单</div>
+          <div id="order-menu" class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4"></div>
+        </div>
+        <!-- 本次点单 -->
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 sticky top-24">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-sm font-semibold text-slate-800">本次点单</div>
+            <div class="text-xs text-slate-500">桌号 <b id="cart-table-name" class="text-emerald-700">—</b></div>
+          </div>
+          <div id="order-cart" class="space-y-3 min-h-[80px]"></div>
+          <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+            <span class="text-sm text-slate-500">合计</span>
+            <span class="font-semibold text-lg text-slate-800">¥<span id="order-total">0.00</span></span>
+          </div>
+          <button id="btn-submit-order" onclick="submitOrder()" class="mt-3 w-full py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">提交订单</button>
+          <div id="order-error" class="hidden mt-3 rounded-xl bg-rose-50 border border-rose-200 p-3 text-sm"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 提交前确认弹层（问题5） -->
+    <div id="order-confirm-modal" class="hidden fixed inset-0 z-50 items-center justify-center">
+      <div class="absolute inset-0 bg-slate-900/30" onclick="closeOrderConfirm()"></div>
+      <div class="relative bg-white w-full max-w-md mx-4 rounded-2xl shadow-2xl border border-slate-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-sm font-semibold text-slate-800">确认提交订单</h3>
+          <button onclick="closeOrderConfirm()" class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500">✕</button>
+        </div>
+        <div id="order-confirm-body" class="text-sm space-y-2"></div>
+        <div class="mt-5 flex justify-end gap-2">
+          <button onclick="closeOrderConfirm()" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 text-sm font-medium hover:bg-slate-200 transition">返回修改</button>
+          <button id="btn-confirm-submit" onclick="doSubmitOrder()" class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-500 transition">确认提交</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 最近点单记录 -->
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div class="px-4 py-3 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">最近点单记录</div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm min-w-[640px]" style="table-layout:auto;">
+          <thead>
+            <tr class="bg-slate-50 text-left text-xs text-slate-400 uppercase tracking-wide">
+              <th class="px-4 py-3">单号</th><th class="px-4 py-3">桌号</th><th class="px-4 py-3">明细</th>
+              <th class="px-4 py-3">金额</th><th class="px-4 py-3">时间</th>
+            </tr>
+          </thead>
+          <tbody id="order-history-tbody"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
   <div id="view-denied" class="hidden flex-col w-full max-w-full px-6 py-6 space-y-5">
     <div class="bg-white border border-rose-200 rounded-2xl shadow-sm p-8 text-center text-rose-500 text-sm">当前角色无权限访问该页面</div>
@@ -424,6 +505,14 @@
     }
     let activeTab = 'pending';
 
+    // ===== 点单全局状态（Phase 10）=====
+    // 必须在 initAuth()/showView()/gotoDefaultView() 之前声明并初始化：
+    // orderPageOnShow() 在登录启动链路中会被同步调用并读取这些状态，
+    // 若放在文件后部会触发 let 的 TDZ（Cannot access before initialization）。
+    let orderCart = {};            // { dish_id: {dish_id, name, price, category, qty} }
+    let orderTableName = '';       // 当前桌号（前端流程状态，不传给后端）
+    let _orderMenu = [];           // 可售菜品菜单（GET /sales/menu 结果）
+
     const healthUI = {
       healthy:  { badge:'bg-emerald-50 text-emerald-700 border-emerald-200', bar:'bg-emerald-500', label:'健康' },
       low:      { badge:'bg-amber-50 text-amber-700 border-amber-200',     bar:'bg-amber-500', label:'偏低' },
@@ -502,11 +591,25 @@
     // 启动即鉴权（置于其它顶层逻辑之前执行）：未登录永远先见登录层
     initAuth();
     async function api(path, opts={}){
+      // 构造完整 headers：默认 JSON + 调用方自定义(如 X-Idempotency-Key) + Authorization。
+      // 注意：必须用「构造后的 headers」发起请求；不能 Object.assign({headers}, opts)，
+      // 否则 opts.headers 会把 Authorization/Content-Type 覆盖掉（导致 POST 401 / text-plain）。
       const headers = Object.assign({ 'Content-Type':'application/json' }, (opts.headers||{}));
       const token = getAuthToken();
       if(token) headers['Authorization'] = 'Bearer ' + token;
-      const r = await fetch(API + path, Object.assign({ headers }, opts));
-      if(!r.ok){ let m=r.status+' '+r.statusText; try{const j=await r.json(); m=j.detail||m;}catch(e){} throw new Error(m); }
+      const { headers: _ignored, ...restOpts } = opts;
+      const r = await fetch(API + path, Object.assign({ headers }, restOpts));
+      if(!r.ok){
+        let m = r.status + ' ' + r.statusText;
+        let err = new Error(m);
+        try{
+          const j = await r.json();
+          const d = j && j.detail;
+          if(d && typeof d === 'object'){ err.message = d.message || m; if(d.missing) err.missing = d.missing; }
+          else if(d){ err.message = String(d); }
+        }catch(e){ /* 非 JSON 响应，保留默认 m */ }
+        throw err;
+      }
       return r.json();
     }
 
@@ -836,6 +939,240 @@
     window.fetchDashboardData = loadDashboard;
     window.hideIngError = hideIngError;
 
+    // ================= 前台点单（Phase 10 · 真实餐饮模式） =================
+    // 购物车状态/菜单/桌号 已在脚本顶部声明（见上方全局点单状态），此处不再重复声明。
+
+    function orderMoney(v){ return Number(v||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+    function escQty(n){ n = parseInt(n,10); return (isNaN(n)||n<1) ? 1 : n; }
+
+    // ---------- 步骤1：桌号选择 ----------
+    function enterOrderFlowFromTableSelect(){
+      // 刷新桌号按钮高亮
+      document.querySelectorAll('#table-chip-list .table-chip').forEach(b=>{
+        const on = b.dataset.table === orderTableName;
+        b.className = 'table-chip px-4 py-2 rounded-xl text-sm transition ' + (on
+          ? 'bg-emerald-600 text-white border-emerald-600'
+          : 'border border-slate-200 text-slate-600 hover:border-emerald-300 hover:text-emerald-700');
+      });
+    }
+    function selectTable(name){
+      orderTableName = name;
+      // 展示点菜主区
+      document.getElementById('order-step-table').classList.add('hidden');
+      const menu = document.getElementById('order-step-menu');
+      menu.classList.remove('hidden'); menu.classList.add('flex');
+      const orderNameEl = document.getElementById('order-table-name');
+      const cartNameEl = document.getElementById('cart-table-name');
+      if(orderNameEl) orderNameEl.textContent = name;
+      if(cartNameEl) cartNameEl.textContent = name;
+      enterOrderFlowFromTableSelect();
+      loadOrderPage();  // 加载菜单 + 历史
+    }
+    function backToSelectTable(){
+      document.getElementById('order-step-menu').classList.add('hidden');
+      document.getElementById('order-step-menu').classList.remove('flex');
+      document.getElementById('order-step-table').classList.remove('hidden');
+      enterOrderFlowFromTableSelect();
+    }
+
+    // ---------- 步骤2：菜品菜单 ----------
+    function renderOrderMenu(){
+      const box = document.getElementById('order-menu');
+      if(!box) return;
+      if(!_orderMenu.length){ box.innerHTML='<div class="text-center text-slate-400 text-sm py-10 col-span-full">暂无菜品，请先由 manager 录入菜谱。</div>'; return; }
+      box.innerHTML = _orderMenu.map(d=>{
+        const inCart = orderCart[d.dish_id] ? orderCart[d.dish_id].qty : 0;
+        return `
+        <div class="fade-in rounded-xl border border-slate-200 p-4 flex flex-col gap-2 ${inCart?'border-emerald-300 bg-emerald-50/40':''}">
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex items-start gap-3 min-w-0">
+              <!-- 图片占位（暂不实现图片上传/外链，仅留容器） -->
+              <div class="w-16 h-16 shrink-0 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-300 text-lg">🍽</div>
+              <div class="min-w-0">
+                <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">${escTxt(d.category||'菜品')}</span>
+                <div class="font-medium text-slate-800 mt-1">${escTxt(d.name)}</div>
+              </div>
+            </div>
+            <div class="text-sm font-semibold text-emerald-700 shrink-0">¥${orderMoney(d.price)}</div>
+          </div>
+          <div class="mt-1 flex items-center justify-between">
+            ${inCart ? `<span class="text-xs text-emerald-600">已选 ${inCart} 份</span>` : `<span class="text-xs text-slate-400">每份</span>`}
+            <button onclick="orderAddDish(${d.dish_id})" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition active:scale-95">＋ 加入本次点单</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // 左侧 "加入本次点单" → 该菜 qty+1（右侧可再直接改数量）
+    function orderAddDish(dish_id){
+      const menu = _orderMenu.find(d=>d.dish_id===dish_id);
+      if(!menu) return;
+      const cur = orderCart[dish_id] ? orderCart[dish_id].qty : 0;
+      orderCart[dish_id] = { dish_id: dish_id, name: menu.name, price: menu.price, category: menu.category, qty: cur + 1 };
+      renderOrderMenu(); renderOrderCart();
+    }
+
+    // ---------- 右侧【本次点单】（POS 风格：−/+ 步进 + 数量输入框 + 一键删除整项）----------
+    function renderOrderCart(){
+      const box = document.getElementById('order-cart');
+      const err = document.getElementById('order-error');
+      if(err){ err.classList.add('hidden'); }
+      const lines = Object.values(orderCart);
+      if(!lines.length){ box.innerHTML='<div class="text-center text-slate-400 text-sm py-6">尚未加入菜品</div>'; }
+      else {
+        box.innerHTML = lines.map(c=>`
+          <div class="rounded-xl border border-slate-200 p-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="font-medium text-slate-800 text-sm">${escTxt(c.name)}</div>
+                <div class="text-xs text-slate-400 mt-0.5">单价 ¥${orderMoney(c.price)}</div>
+              </div>
+              <button onclick="orderRemoveDish(${c.dish_id})" class="shrink-0 text-xs px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 transition">删除</button>
+            </div>
+            <div class="flex items-center justify-between mt-2 gap-2">
+              <div class="flex items-center gap-1">
+                <button onclick="orderStepQty(${c.dish_id},-1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-lg leading-none transition">−</button>
+                <input type="number" min="1" step="1" value="${escQty(c.qty)}"
+                       onchange="orderSetQty(${c.dish_id}, this.value)"
+                       class="w-14 px-1 py-1 rounded-lg border border-slate-200 text-sm tabular-nums text-center focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+                <button onclick="orderStepQty(${c.dish_id},1)" class="w-7 h-7 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-lg leading-none transition">+</button>
+              </div>
+              <div class="text-sm font-semibold text-slate-800">¥${orderMoney(c.price*c.qty)}</div>
+            </div>
+          </div>`).join('');
+      }
+      updateOrderTotal();
+    }
+    function updateOrderTotal(){
+      const total = Object.values(orderCart).reduce((a,c)=>a+c.price*c.qty,0);
+      document.getElementById('order-total').textContent = orderMoney(total);
+    }
+    function orderStepQty(dish_id, delta){
+      const cur = orderCart[dish_id] ? orderCart[dish_id].qty : 0;
+      const next = cur + delta;
+      if(next < 1){ return; }              // 最少 1 份；降到 0 请用删除整项
+      orderCart[dish_id].qty = next;
+      renderOrderCart(); renderOrderMenu();
+    }
+    function orderSetQty(dish_id, rawVal){
+      const qty = escQty(rawVal);
+      if(orderCart[dish_id]){ orderCart[dish_id].qty = qty; }
+      renderOrderCart(); renderOrderMenu();
+    }
+    function orderRemoveDish(dish_id){ delete orderCart[dish_id]; renderOrderCart(); renderOrderMenu(); }
+
+    // ---------- 错误 / 确认展示 ----------
+    function showOrderError(msg, missing){
+      const el = document.getElementById('order-error');
+      if(!el) return;
+      let html = `<div class="text-rose-600 font-medium mb-1">⚠ ${escTxt(msg)}</div>`;
+      if(Array.isArray(missing) && missing.length){
+        html += '<ul class="text-xs text-rose-700 space-y-0.5 list-disc pl-4">' + missing.map(m=>
+          `<li>${escTxt(m.name||('#'+m.ingredient_id))}：需 ${m.required}${m.unit||''} / 现 ${m.current}${m.unit||''}</li>`).join('') + '</ul>';
+        html += '<div class="text-xs text-rose-500 mt-1">请减少份数或改选其他菜品后再提交。</div>';
+      }
+      el.innerHTML = html;
+      el.classList.remove('hidden');
+    }
+
+    // ---------- 提交：先自检 → 弹确认 → 真正 POST ----------
+    function buildOrderPayload(){
+      // 只取有效行；自检不合规则不发送（见 submitOrder 校验）
+      return Object.values(orderCart)
+        .filter(c => c && typeof c.dish_id === 'number' && c.qty > 0)
+        .map(c => ({ dish_id: c.dish_id, qty: escQty(c.qty) }));
+    }
+    function submitOrder(){
+      // 前置自检（问题1要求）：不发送非法请求
+      if(!orderTableName){ showToast('请先选择桌号'); return; }
+      const items = buildOrderPayload();
+      if(!items.length){ showToast('本次点单为空，请先加入菜品'); return; }
+      for(const it of items){
+        if(typeof it.dish_id !== 'number' || !(it.qty>0)){
+          showToast('订单项数据不完整，请重新加入'); return;
+        }
+      }
+      // 弹确认层（桌号/明细/总金额）
+      const lines = Object.values(orderCart).map(c=>
+        `<div class="flex justify-between text-sm"><span class="text-slate-800">${escTxt(c.name)} <span class="text-slate-500">×${c.qty}</span></span><span class="tabular-nums text-slate-700">¥${orderMoney(c.price*c.qty)}</span></div>`).join('');
+      const total = Object.values(orderCart).reduce((a,c)=>a+c.price*c.qty,0);
+      const body = document.getElementById('order-confirm-body');
+      body.innerHTML = `
+        <div class="text-sm"><span class="text-slate-500">桌号：</span><b class="text-emerald-700">${escTxt(orderTableName)}</b></div>
+        <div class="my-2 border-t border-dashed border-slate-200"></div>
+        <div class="text-xs text-slate-400 mb-1">菜品：</div>
+        ${lines}
+        <div class="my-2 border-t border-dashed border-slate-200"></div>
+        <div class="flex justify-between text-sm font-semibold"><span>总金额</span><span class="text-emerald-700">¥${orderMoney(total)}</span></div>`;
+      const modal = document.getElementById('order-confirm-modal');
+      modal.classList.remove('hidden'); modal.classList.add('flex');
+    }
+    function closeOrderConfirm(){
+      const modal = document.getElementById('order-confirm-modal');
+      modal.classList.add('hidden'); modal.classList.remove('flex');
+    }
+    async function doSubmitOrder(){
+      const items = buildOrderPayload();
+      if(!items.length){ closeOrderConfirm(); showToast('本次点单为空'); return; }
+      const btn = document.getElementById('btn-confirm-submit');
+      btn.disabled = true;
+      try{
+        const data = await api('/sales/orders', { method:'POST',
+          headers:{'X-Idempotency-Key':'order-'+Date.now()+'-'+Math.random().toString(36).slice(2,8)},
+          body: JSON.stringify({ items }) });
+        orderCart = {}; renderOrderMenu(); renderOrderCart();
+        closeOrderConfirm();
+        showToast('✓ 点单成功：¥'+orderMoney(data.total_amount)+'（'+data.order_no+'）');
+        await loadOrderHistory();
+      }catch(e){
+        closeOrderConfirm();
+        const missing = (e && e.missing) ? e.missing : null;
+        const msg = (e && e.message) ? e.message : '下单失败';
+        if(missing){ showOrderError(msg, missing); }
+        else { showToast('下单失败：'+msg); }
+      }finally{ btn.disabled=false; }
+    }
+
+    // ---------- 最近点单记录（桌号来自后端订单无此字段 → 展示 —） ----------
+    function renderOrderHistory(orders){
+      const tbody = document.getElementById('order-history-tbody');
+      if(!tbody) return;
+      if(!orders || !orders.length){ tbody.innerHTML='<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400 text-sm">暂无点单记录</td></tr>'; return; }
+      tbody.innerHTML = orders.map(o=>`
+        <tr class="border-t border-slate-100 hover:bg-slate-50">
+          <td class="px-4 py-3 font-mono text-xs text-slate-600">${escTxt(o.order_no)}</td>
+          <td class="px-4 py-3 text-slate-600">—</td>
+          <td class="px-4 py-3 text-slate-800">${(o.items||[]).map(i=>escTxt(i.dish_name)+'×'+i.qty).join('、')||'—'}</td>
+          <td class="px-4 py-3 tabular-nums font-medium">¥${orderMoney(o.total_amount)}</td>
+          <td class="px-4 py-3 tabular-nums text-xs text-slate-500">${escTxt((o.created_at||'').replace('T',' ').slice(0,19))}</td>
+        </tr>`).join('');
+    }
+    async function loadOrderHistory(){
+      try{
+        const d = await api('/sales/orders?limit=20&order_type=ORDER_SALE');
+        if(document.getElementById('order-virtual-date')) document.getElementById('order-virtual-date').textContent = d.virtual_date||'—';
+        renderOrderHistory(d.orders||[]);
+      }catch(e){ /* 静默：历史区加载失败不阻断点单 */ }
+    }
+    async function loadOrderPage(){
+      try{
+        const menu = await api('/sales/menu');
+        _orderMenu = menu || [];
+        renderOrderMenu(); renderOrderCart();
+      }catch(e){ showToast('菜单加载失败：'+e.message); }
+      await loadOrderHistory();
+    }
+    // 进入点单页时：若已选过桌号则保持点菜界面，否则回到选桌
+    function orderPageOnShow(){
+      const stepMenu = document.getElementById('order-step-menu');
+      const stepTable = document.getElementById('order-step-table');
+      if(!stepMenu || !stepTable) return;
+      if(orderTableName){ stepTable.classList.add('hidden'); stepMenu.classList.remove('hidden'); stepMenu.classList.add('flex'); }
+      else { stepMenu.classList.add('hidden'); stepMenu.classList.remove('flex'); stepTable.classList.remove('hidden'); }
+      enterOrderFlowFromTableSelect();
+      loadOrderPage();
+    }
+
     // ================= 侧边栏视图切换与食材管理 =================
     function showView(name){
       // 权限守卫（Phase 9-B）：已登录角色无权限时拦截
@@ -857,6 +1194,7 @@
       if(name==='price-reports') renderPriceReport();
       if(name==='stock-out') renderStockOutLogs();
       if(name==='inbound') renderInboundOrders();
+      if(name==='order') orderPageOnShow();
     }
 
     function renderInventoryTable(){

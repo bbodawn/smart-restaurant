@@ -64,7 +64,7 @@ def test_phase9b_login_and_rbac_present():
     """Phase 9-B：登录视图/退出/角色权限/Authorization/角色中文映射存在。"""
     html = INDEX.read_text(encoding="utf-8")
     for tok in ["login-view", "logout", "ROLE_PERMISSION", "canView", "ROLE_CN",
-                "'Bearer ' + token", "点单功能开发中", "当前角色无权限访问该页面",
+                "'Bearer ' + token", "loadOrderPage", "当前角色无权限访问该页面",
                 "order_clerk"]:
         assert tok in html, f"missing {tok}"
     assert "主管" in html and "采购员" in html and "点单员" in html
